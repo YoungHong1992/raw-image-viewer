@@ -17,6 +17,17 @@
         "command": "raw-image-viewer.helloWorld",
         "title": "Hello World"
       }
+    ],
+    "customEditors": [
+      {
+        "viewType": "raw-image-viewer.pawDraw",
+        "displayName": "Paw Draw",
+        "selector": [
+          {
+            "filenamePattern": "*.pawdraw"
+          }
+        ]
+      }
     ]
   },
   "scripts": {
