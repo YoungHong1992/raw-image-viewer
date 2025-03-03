@@ -1,0 +1,12 @@
+.raw-image-container {
+    padding: 1em;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.raw-image-canvas {
+    border: 1px solid var(--vscode-panel-border);
+    max-width: 100%;
+    max-height: 100vh;
+}

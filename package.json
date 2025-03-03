@@ -27,6 +27,15 @@
             "filenamePattern": "*.pawdraw"
           }
         ]
+      },
+      {
+        "viewType": "raw-image-viewer.rawImage",
+        "displayName": "Raw Image Viewer",
+        "selector": [
+          {
+            "filenamePattern": "*.raw"
+          }
+        ]
       }
     ]
   },
