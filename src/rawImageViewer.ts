@@ -91,11 +91,11 @@ class RawImageDocument extends Disposable implements vscode.CustomDocument {
     }
 }
 
-export class RawImageEditorProvider implements vscode.CustomEditorProvider<RawImageDocument> {
+export class RawImageViewerProvider implements vscode.CustomEditorProvider<RawImageDocument> {
     public static register(context: vscode.ExtensionContext): vscode.Disposable {
         return vscode.window.registerCustomEditorProvider(
-            RawImageEditorProvider.viewType,
-            new RawImageEditorProvider(context),
+            RawImageViewerProvider.viewType,
+            new RawImageViewerProvider(context),
             {
                 webviewOptions: {
                     retainContextWhenHidden: true,
