@@ -20,15 +20,6 @@
     ],
     "customEditors": [
       {
-        "viewType": "raw-image-viewer.pawDraw",
-        "displayName": "Paw Draw",
-        "selector": [
-          {
-            "filenamePattern": "*.pawdraw"
-          }
-        ]
-      },
-      {
         "viewType": "raw-image-viewer.rawImage",
         "displayName": "Raw Image Viewer",
         "selector": [
