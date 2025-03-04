@@ -54,47 +54,9 @@ class RawImageDocument extends Disposable implements vscode.CustomDocument {
         this._onDidDispose.fire();
         super.dispose();
     }
-
-    async save(cancellation: vscode.CancellationToken): Promise<void> {
-        await this.saveAs(this.uri, cancellation);
-    }
-
-    async saveAs(targetResource: vscode.Uri, cancellation: vscode.CancellationToken): Promise<void> {
-        const fileData = await this._delegate.getFileData();
-        if (cancellation.isCancellationRequested) {
-            return;
-        }
-        await vscode.workspace.fs.writeFile(targetResource, fileData);
-    }
-
-    async revert(_cancellation: vscode.CancellationToken): Promise<void> {
-        const diskContent = await RawImageDocument.readFile(this.uri);
-        this._documentData = diskContent;
-        this._onDidChangeDocument.fire({
-            content: diskContent,
-        });
-    }
-
-    async backup(destination: vscode.Uri, cancellation: vscode.CancellationToken): Promise<vscode.CustomDocumentBackup> {
-        await this.saveAs(destination, cancellation);
-
-        return {
-            id: destination.toString(),
-            delete: async () => {
-                try {
-                    await vscode.workspace.fs.delete(destination);
-                } catch {
-                    // noop
-                }
-            }
-        };
-    }
 }
 
-export class RawImageViewerProvider implements vscode.CustomEditorProvider<RawImageDocument> {
-    private static readonly viewType = 'raw-image-viewer.rawImage';
-    constructor(private readonly _context: vscode.ExtensionContext) { }
-
+export class RawImageViewerProvider implements vscode.CustomReadonlyEditorProvider<RawImageDocument> {
     public static register(context: vscode.ExtensionContext): vscode.Disposable {
         return vscode.window.registerCustomEditorProvider(
             RawImageViewerProvider.viewType,
@@ -107,10 +69,12 @@ export class RawImageViewerProvider implements vscode.CustomEditorProvider<RawIm
             });
     }
 
-    
+    private static readonly viewType = 'raw-image-viewer.rawImage';
     private readonly webviews = new Map<string, vscode.WebviewPanel>();
 
-    
+    constructor(
+        private readonly _context: vscode.ExtensionContext
+    ) { }
 
     async openCustomDocument(
         uri: vscode.Uri,
@@ -158,22 +122,6 @@ export class RawImageViewerProvider implements vscode.CustomEditorProvider<RawIm
     private readonly _onDidChangeCustomDocument = new vscode.EventEmitter<vscode.CustomDocumentEditEvent<RawImageDocument>>();
     public readonly onDidChangeCustomDocument = this._onDidChangeCustomDocument.event;
 
-    public saveCustomDocument(document: RawImageDocument, cancellation: vscode.CancellationToken): Thenable<void> {
-        return document.save(cancellation);
-    }
-
-    public saveCustomDocumentAs(document: RawImageDocument, destination: vscode.Uri, cancellation: vscode.CancellationToken): Thenable<void> {
-        return document.saveAs(destination, cancellation);
-    }
-
-    public revertCustomDocument(document: RawImageDocument, cancellation: vscode.CancellationToken): Thenable<void> {
-        return document.revert(cancellation);
-    }
-
-    public backupCustomDocument(document: RawImageDocument, context: vscode.CustomDocumentBackupContext, cancellation: vscode.CancellationToken): Thenable<vscode.CustomDocumentBackup> {
-        return document.backup(context.destination, cancellation);
-    }
-
     private getHtmlForWebview(webview: vscode.Webview): string {
         const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(
             this._context.extensionUri, 'media', 'rawImage.js'));
@@ -194,7 +142,8 @@ export class RawImageViewerProvider implements vscode.CustomEditorProvider<RawIm
             <html lang="en">
             <head>
                 <meta charset="UTF-8">
-                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} blob:; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} blob:; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <link href="${styleResetUri}" rel="stylesheet" />
                 <link href="${styleVSCodeUri}" rel="stylesheet" />
                 <link href="${styleMainUri}" rel="stylesheet" />
@@ -202,21 +151,6 @@ export class RawImageViewerProvider implements vscode.CustomEditorProvider<RawIm
             </head>
             <body>
                 <div class="raw-image-container">
-                    <div class="image-params-form">
-                        <div class="form-group">
-                            <label for="image-width">宽度:</label>
-                            <input type="number" id="image-width" value="2688" min="1" />
-                        </div>
-                        <div class="form-group">
-                            <label for="image-height">高度:</label>
-                            <input type="number" id="image-height" value="1520" min="1" />
-                        </div>
-                        <div class="form-group">
-                            <label for="bits-per-pixel">每像素位数:</label>
-                            <input type="number" id="bits-per-pixel" value="10" min="1" max="16" />
-                        </div>
-                        <button id="apply-params-btn">应用参数</button>
-                    </div>
                     <canvas class="raw-image-canvas"></canvas>
                 </div>
                 <script nonce="${nonce}" src="${scriptUri}"></script>
