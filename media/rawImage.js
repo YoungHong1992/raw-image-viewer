@@ -8,12 +8,34 @@
     class RawImageViewer {
         constructor(/** @type {HTMLElement} */ parent) {
             this.ready = false;
+            this.rawData = null; // 存储原始数据
             this._initElements(parent);
+            this._setupEventListeners();
         }
 
         _initElements(/** @type {HTMLElement} */ parent) {
             this.canvas = /** @type {HTMLCanvasElement} */ (document.querySelector('.raw-image-canvas'));
             this.ctx = this.canvas.getContext('2d');
+            
+            // 获取参数输入元素
+            this.widthInput = document.getElementById('image-width');
+            this.heightInput = document.getElementById('image-height');
+            this.bitsPerPixelInput = document.getElementById('bits-per-pixel');
+            this.applyButton = document.getElementById('apply-params-btn');
+        }
+        
+        _setupEventListeners() {
+            // 添加应用参数按钮的点击事件
+            this.applyButton.addEventListener('click', () => {
+                if (this.rawData) {
+                    const width = parseInt(this.widthInput.value, 10);
+                    const height = parseInt(this.heightInput.value, 10);
+                    const bitsPerPixel = parseInt(this.bitsPerPixelInput.value, 10);
+                    
+                    // 使用用户输入的参数重新渲染图像
+                    this.displayRawImage(this.rawData, width, height, bitsPerPixel);
+                }
+            });
         }
 
         /**
@@ -23,6 +45,9 @@
          * @param {number} bitsPerPixel 
          */
         async displayRawImage(data, width = 2688, height = 1520, bitsPerPixel = 10) {
+            // 存储原始数据以便重新渲染
+            this.rawData = data;
+            
             // 设置画布尺寸
             this.canvas.width = width;
             this.canvas.height = height;
@@ -69,9 +94,8 @@
          * @param {Uint8Array} data 
          */
         async reset(data) {
-            // 从文件名或其他方式获取图像参数
-            // 这里使用默认值作为示例
-            await this.displayRawImage(data);
+            // 只保存原始数据，不立即显示图像
+            this.rawData = data;
         }
     }
 
@@ -85,13 +109,14 @@
         switch (type) {
             case 'init': {
                 if (body.value) {
-                    await viewer.reset(new Uint8Array(body.value));
+                    // 只保存原始数据，不立即显示图像
+                    viewer.rawData = new Uint8Array(body.value);
                 }
                 break;
             }
             case 'getFileData': {
                 // 获取当前显示的图像数据
-                const data = new Uint8Array(0); // TODO: 实现获取当前图像数据的逻辑
+                const data = viewer.rawData || new Uint8Array(0);
                 vscode.postMessage({ type: 'response', requestId: e.data.requestId, body: Array.from(data) });
                 break;
             }

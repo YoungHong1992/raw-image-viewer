@@ -92,6 +92,9 @@ class RawImageDocument extends Disposable implements vscode.CustomDocument {
 }
 
 export class RawImageViewerProvider implements vscode.CustomEditorProvider<RawImageDocument> {
+    private static readonly viewType = 'raw-image-viewer.rawImage';
+    constructor(private readonly _context: vscode.ExtensionContext) { }
+
     public static register(context: vscode.ExtensionContext): vscode.Disposable {
         return vscode.window.registerCustomEditorProvider(
             RawImageViewerProvider.viewType,
@@ -104,12 +107,10 @@ export class RawImageViewerProvider implements vscode.CustomEditorProvider<RawIm
             });
     }
 
-    private static readonly viewType = 'raw-image-viewer.rawImage';
+    
     private readonly webviews = new Map<string, vscode.WebviewPanel>();
 
-    constructor(
-        private readonly _context: vscode.ExtensionContext
-    ) { }
+    
 
     async openCustomDocument(
         uri: vscode.Uri,
@@ -193,8 +194,7 @@ export class RawImageViewerProvider implements vscode.CustomEditorProvider<RawIm
             <html lang="en">
             <head>
                 <meta charset="UTF-8">
-                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} blob:; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} blob:; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">                <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <link href="${styleResetUri}" rel="stylesheet" />
                 <link href="${styleVSCodeUri}" rel="stylesheet" />
                 <link href="${styleMainUri}" rel="stylesheet" />
@@ -202,6 +202,21 @@ export class RawImageViewerProvider implements vscode.CustomEditorProvider<RawIm
             </head>
             <body>
                 <div class="raw-image-container">
+                    <div class="image-params-form">
+                        <div class="form-group">
+                            <label for="image-width">宽度:</label>
+                            <input type="number" id="image-width" value="2688" min="1" />
+                        </div>
+                        <div class="form-group">
+                            <label for="image-height">高度:</label>
+                            <input type="number" id="image-height" value="1520" min="1" />
+                        </div>
+                        <div class="form-group">
+                            <label for="bits-per-pixel">每像素位数:</label>
+                            <input type="number" id="bits-per-pixel" value="10" min="1" max="16" />
+                        </div>
+                        <button id="apply-params-btn">应用参数</button>
+                    </div>
                     <canvas class="raw-image-canvas"></canvas>
                 </div>
                 <script nonce="${nonce}" src="${scriptUri}"></script>
