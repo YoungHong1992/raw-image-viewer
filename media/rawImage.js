@@ -56,7 +56,7 @@
             const imageData = this.ctx.createImageData(width, height);
             const pixels = imageData.data;
 
-            // 计算每个像素的字节数
+            // 计算每个像素的字节数和位移量
             const bytesPerPixel = Math.ceil(bitsPerPixel / 8);
             const maxValue = Math.pow(2, bitsPerPixel) - 1;
 
@@ -70,8 +70,16 @@
                     let pixelValue = 0;
                     if (bitsPerPixel <= 8) {
                         pixelValue = data[pixelIndex];
-                    } else {
-                        pixelValue = (data[pixelIndex] << 8) | data[pixelIndex + 1];
+                    } else if (bitsPerPixel <= 16) {
+                        // 使用位运算正确处理多字节像素值
+                        // 假设数据是小端序（LSB在前）
+                        pixelValue = data[pixelIndex] | (data[pixelIndex + 1] << 8);
+                        
+                        // 如果位深度小于16，需要右移多余的位
+                        const extraBits = 16 - bitsPerPixel;
+                        if (extraBits > 0) {
+                            pixelValue = pixelValue >> extraBits;
+                        }
                     }
 
                     // 归一化像素值到 0-255 范围
