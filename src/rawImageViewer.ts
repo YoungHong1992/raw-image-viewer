@@ -2,34 +2,24 @@ import * as vscode from 'vscode';
 import { Disposable, disposeAll } from './dispose';
 import { getNonce } from './util';
 
-interface RawImageDocumentDelegate {
-    getFileData(): Promise<Uint8Array>;
-}
-
 class RawImageDocument extends Disposable implements vscode.CustomDocument {
     private readonly _uri: vscode.Uri;
     private _documentData: Uint8Array;
-    private readonly _delegate: RawImageDocumentDelegate;
 
     private constructor(
         uri: vscode.Uri,
-        initialContent: Uint8Array,
-        delegate: RawImageDocumentDelegate
+        initialContent: Uint8Array
     ) {
         super();
         this._uri = uri;
         this._documentData = initialContent;
-        this._delegate = delegate;
     }
 
     static async create(
-        uri: vscode.Uri,
-        backupId: string | undefined,
-        delegate: RawImageDocumentDelegate,
+        uri: vscode.Uri
     ): Promise<RawImageDocument> {
-        const dataFile = typeof backupId === 'string' ? vscode.Uri.parse(backupId) : uri;
-        const fileData = await RawImageDocument.readFile(dataFile);
-        return new RawImageDocument(uri, fileData, delegate);
+        const fileData = await RawImageDocument.readFile(uri);
+        return new RawImageDocument(uri, fileData);
     }
 
     private static async readFile(uri: vscode.Uri): Promise<Uint8Array> {
@@ -80,17 +70,7 @@ export class RawImageViewerProvider implements vscode.CustomReadonlyEditorProvid
         openContext: { backupId?: string },
         _token: vscode.CancellationToken
     ): Promise<RawImageDocument> {
-        const document = await RawImageDocument.create(uri, openContext.backupId, {
-            getFileData: async () => {
-                const webview = this.webviews.get(document.uri.toString());
-                if (!webview) {
-                    throw new Error('Could not find webview to save for');
-                }
-                const response = await this.postMessageWithResponse<number[]>(webview, 'getFileData', {});
-                return new Uint8Array(response);
-            }
-        });
-
+        const document = await RawImageDocument.create(uri);
         return document;
     }
 
