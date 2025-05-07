@@ -1,71 +1,97 @@
-# raw-image-viewer README
+# Raw Image Viewer
 
-This is the README for your extension "raw-image-viewer". After writing up a brief description, we recommend including the following sections.
+A Visual Studio Code extension for viewing RAW image files directly in the editor.
 
-## Features
+[English](#english) | [中文](#chinese)
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+<a id="english"></a>
 
-For example if there is an image subfolder under your extension project workspace:
+## English
 
-\!\[feature X\]\(images/feature-x.png\)
+### Features
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+- View RAW image files (*.raw) directly in VS Code
+- Customize image parameters:
+  - Width
+  - Height
+  - Bits per pixel (1-16 bit)
+- Real-time parameter adjustment
+- Grayscale visualization of RAW data
 
-## Requirements
+### Usage
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+1. Open any `.raw` file in VS Code
+2. The Raw Image Viewer will automatically open
+3. Adjust the parameters as needed:
+   - Width: Set the image width in pixels
+   - Height: Set the image height in pixels
+   - Bits per pixel: Set the bit depth (1-16)
+4. Click "Apply Parameters" to update the view
 
-## Extension Settings
+### Requirements
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+- Visual Studio Code 1.91.0 or higher
 
-For example:
+### Example Files
 
-This extension contributes the following settings:
+The extension includes several example RAW files in the `exampleFiles` folder that you can use to test the viewer.
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+### Known Issues
 
-## Known Issues
+- Currently only supports grayscale RAW images
+- Assumes little-endian byte order for multi-byte pixels
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+### Release Notes
 
-## Release Notes
+#### 0.0.1
 
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
+- Initial release
+- Basic RAW image viewing functionality
+- Customizable width, height, and bit depth
 
 ---
 
-## Following extension guidelines
+<a id="chinese"></a>
 
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
+## 中文
 
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
+### 功能特点
 
-## Working with Markdown
+- 直接在VS Code中查看RAW图像文件（*.raw）
+- 自定义图像参数：
+  - 宽度
+  - 高度
+  - 每像素位数（1-16位）
+- 实时参数调整
+- RAW数据的灰度可视化
 
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
+### 使用方法
 
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
+1. 在VS Code中打开任意`.raw`文件
+2. Raw Image Viewer将自动打开
+3. 根据需要调整参数：
+   - 宽度：设置图像宽度（像素）
+   - 高度：设置图像高度（像素）
+   - 每像素位数：设置位深度（1-16）
+4. 点击"应用参数"更新视图
 
-## For more information
+### 系统要求
 
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
+- Visual Studio Code 1.91.0 或更高版本
 
-**Enjoy!**
+### 示例文件
+
+扩展包含`exampleFiles`文件夹中的几个示例RAW文件，您可以用它们来测试查看器。
+
+### 已知问题
+
+- 目前仅支持灰度RAW图像
+- 对于多字节像素，假定为小端字节序
+
+### 发布说明
+
+#### 0.0.1
+
+- 初始版本
+- 基本的RAW图像查看功能
+- 可自定义宽度、高度和位深度

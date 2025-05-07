@@ -1,0 +1,55 @@
+.raw-image-container {
+    padding: 1em;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.raw-image-canvas {
+    border: 1px solid var(--vscode-panel-border);
+    max-width: 100%;
+    max-height: 100vh;
+}
+
+.image-params-form {
+    margin-bottom: 1em;
+    padding: 1em;
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+    background-color: var(--vscode-editor-background);
+    width: 100%;
+    max-width: 500px;
+}
+
+.form-group {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5em;
+}
+
+.form-group label {
+    width: 100px;
+    margin-right: 1em;
+}
+
+.form-group input {
+    flex: 1;
+    padding: 0.3em;
+    background-color: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border);
+}
+
+#apply-params-btn {
+    margin-top: 0.5em;
+    padding: 0.5em 1em;
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    border-radius: 2px;
+    cursor: pointer;
+}
+
+#apply-params-btn:hover {
+    background-color: var(--vscode-button-hoverBackground);
+}

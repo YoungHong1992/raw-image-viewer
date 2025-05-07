@@ -3,8 +3,12 @@
   "displayName": "RawImageViewer",
   "description": "",
   "version": "0.0.1",
+  "publisher": "YoungHong1992",
   "engines": {
     "vscode": "^1.91.0"
+  },
+  "repository": {
+    "github": "https://github.com/YoungHong1992/raw-image-viewer"
   },
   "categories": [
     "Other"
@@ -20,11 +24,11 @@
     ],
     "customEditors": [
       {
-        "viewType": "raw-image-viewer.pawDraw",
-        "displayName": "Paw Draw",
+        "viewType": "raw-image-viewer.rawImage",
+        "displayName": "Raw Image Viewer",
         "selector": [
           {
-            "filenamePattern": "*.pawdraw"
+            "filenamePattern": "*.raw"
           }
         ]
       }
