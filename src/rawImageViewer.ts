@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { Disposable, disposeAll } from './dispose';
-import { getNonce } from './util';
 
 class RawImageDocument extends Disposable implements vscode.CustomDocument {
     private readonly _uri: vscode.Uri;
@@ -63,7 +62,7 @@ export class RawImageViewerProvider implements vscode.CustomReadonlyEditorProvid
             });
     }
 
-    private readonly webviews = new Map<string, vscode.WebviewPanel>();
+    private readonly webviewPanelMap = new Map<string, vscode.WebviewPanel>();
 
     async openCustomDocument(
         uri: vscode.Uri,
@@ -79,91 +78,67 @@ export class RawImageViewerProvider implements vscode.CustomReadonlyEditorProvid
         webviewPanel: vscode.WebviewPanel,
         _token: vscode.CancellationToken
     ): Promise<void> {
-        this.webviews.set(document.uri.toString(), webviewPanel);
+        this.webviewPanelMap.set(document.uri.toString(), webviewPanel);
+
+        const mediaBuildPath = vscode.Uri.joinPath(this._context.extensionUri, 'dist', 'media');
 
         webviewPanel.webview.options = {
             enableScripts: true,
+            localResourceRoots: [mediaBuildPath]
         };
-        webviewPanel.webview.html = this.getHtmlForWebview(webviewPanel.webview);
+        webviewPanel.webview.html = await this.getHtmlForWebview(webviewPanel.webview);
 
-        webviewPanel.webview.onDidReceiveMessage(e => this.onMessage(document, e));
+        webviewPanel.webview.onDidReceiveMessage(e => this.onMessage(document, webviewPanel, e));
 
-        webviewPanel.webview.onDidReceiveMessage(e => {
-            if (e.type === 'ready') {
-                this.postMessage(webviewPanel, 'init', {
-                    value: document.documentData,
-                    editable: false
-                });
-            }
+        // Clean up resources when the panel is disposed
+        webviewPanel.onDidDispose(() => {
+            this.webviewPanelMap.delete(document.uri.toString());
         });
     }
 
-    private getHtmlForWebview(webview: vscode.Webview): string {
-        const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(
-            this._context.extensionUri, 'media', 'rawImage.js'));
+    private async getHtmlForWebview(webview: vscode.Webview): Promise<string> {
+        const extensionUri = this._context.extensionUri;
 
-        const styleResetUri = webview.asWebviewUri(vscode.Uri.joinPath(
-            this._context.extensionUri, 'media', 'reset.css'));
+        const mediaBuildPath = vscode.Uri.joinPath(extensionUri, 'dist', 'media');
+        const baseUri = webview.asWebviewUri(mediaBuildPath);
 
-        const styleVSCodeUri = webview.asWebviewUri(vscode.Uri.joinPath(
-            this._context.extensionUri, 'media', 'vscode.css'));
+        const indexPath = vscode.Uri.joinPath(mediaBuildPath, 'index.html');
 
-        const styleMainUri = webview.asWebviewUri(vscode.Uri.joinPath(
-            this._context.extensionUri, 'media', 'rawImage.css'));
+        let htmlContent: string;
+        try {
+            const indexFileContentBytes = await vscode.workspace.fs.readFile(indexPath);
+            htmlContent = new TextDecoder().decode(indexFileContentBytes);
+        } catch (e) {
+            console.error(`Error reading Vite's index.html: ${indexPath.fsPath}`, e);
+            return `<html><body>Error loading extension. Vite build output not found at ${indexPath.fsPath}. Please ensure the UI is built (e.g., 'npm run build' in the media folder).</body></html>`;
+        }
 
-        const nonce = getNonce();
 
-        return /* html */`
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} blob:; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <link href="${styleResetUri}" rel="stylesheet" />
-                <link href="${styleVSCodeUri}" rel="stylesheet" />
-                <link href="${styleMainUri}" rel="stylesheet" />
-                <title>Raw Image Viewer</title>
-            </head>
-            <body>
-                <div class="raw-image-container">
-                    <div class="image-params-form">
-                        <div class="form-group">
-                            <label for="image-width">宽度:</label>
-                            <input type="number" id="image-width" value="2688" min="1" />
-                        </div>
-                        <div class="form-group">
-                            <label for="image-height">高度:</label>
-                            <input type="number" id="image-height" value="1520" min="1" />
-                        </div>
-                        <div class="form-group">
-                            <label for="bits-per-pixel">每像素位数:</label>
-                            <input type="number" id="bits-per-pixel" value="10" min="1" max="16" />
-                        </div>
-                        <button id="apply-params-btn">应用参数</button>
-                    </div>
-                    <canvas class="raw-image-canvas"></canvas>
-                </div>
-                <script nonce="${nonce}" src="${scriptUri}"></script>
-            </body>
-            </html>`;
+        // Ensure the <base> tag is correctly set for webview resource loading
+        const baseTag = `<base href="${baseUri}/">`;
+        if (htmlContent.includes('<base href')) {
+            htmlContent = htmlContent.replace(/<base href=".*?"\/?>/, baseTag);
+        } else {
+            htmlContent = htmlContent.replace('<head>', `<head>\n    ${baseTag}`);
+        }
+
+        return htmlContent;
     }
 
-    private _requestId = 1;
     private readonly _callbacks = new Map<number, (response: any) => void>();
-
-    private postMessageWithResponse<R = unknown>(panel: vscode.WebviewPanel, type: string, body: any): Promise<R> {
-        const requestId = this._requestId++;
-        const p = new Promise<R>(resolve => this._callbacks.set(requestId, resolve));
-        panel.webview.postMessage({ type, requestId, body });
-        return p;
-    }
 
     private postMessage(panel: vscode.WebviewPanel, type: string, body: any): void {
         panel.webview.postMessage({ type, body });
     }
 
-    private onMessage(document: RawImageDocument, message: any) {
+    private onMessage(document: RawImageDocument, panel: vscode.WebviewPanel, message: any) {
         switch (message.type) {
+            case 'ready':
+                this.postMessage(panel, 'init', {
+                    value: document.documentData,
+                    editable: false
+                });
+                return;
             case 'response': {
                 const callback = this._callbacks.get(message.requestId);
                 callback?.(message.body);
