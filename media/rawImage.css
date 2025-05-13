@@ -1,24 +1,26 @@
 .raw-image-container {
     padding: 1em;
     display: flex;
-    flex-direction: column;
-    align-items: center;
+    flex-direction: row;
+    height: calc(100vh - 40px); /* 减去状态栏高度 */
+    position: relative;
 }
 
 .raw-image-canvas {
     border: 1px solid var(--vscode-panel-border);
     max-width: 100%;
-    max-height: 100vh;
+    max-height: 100%;
+    flex: 1;
 }
 
 .image-params-form {
-    margin-bottom: 1em;
     padding: 1em;
     border: 1px solid var(--vscode-panel-border);
     border-radius: 4px;
     background-color: var(--vscode-editor-background);
-    width: 100%;
-    max-width: 500px;
+    width: 250px;
+    margin-right: 1em;
+    overflow-y: auto;
 }
 
 .form-group {
@@ -52,4 +54,32 @@
 
 #apply-params-btn:hover {
     background-color: var(--vscode-button-hoverBackground);
+}
+
+/* 状态栏样式 */
+.status-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 25px;
+    background-color: var(--vscode-statusBar-background);
+    color: var(--vscode-statusBar-foreground);
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    font-size: 12px;
+    border-top: 1px solid var(--vscode-panel-border);
+}
+
+.status-bar-item {
+    margin-right: 15px;
+}
+
+.image-container {
+    flex: 1;
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }

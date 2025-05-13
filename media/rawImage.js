@@ -22,6 +22,11 @@
             this.heightInput = document.getElementById('image-height');
             this.bitsPerPixelInput = document.getElementById('bits-per-pixel');
             this.applyButton = document.getElementById('apply-params-btn');
+            
+            // 获取状态栏元素
+            this.imageSizeElement = document.getElementById('image-size');
+            this.pixelInfoElement = document.getElementById('pixel-info');
+            this.cursorPosElement = document.getElementById('cursor-pos');
         }
         
         _setupEventListeners() {
@@ -35,6 +40,35 @@
                     // 使用用户输入的参数重新渲染图像
                     this.displayRawImage(this.rawData, width, height, bitsPerPixel);
                 }
+            });
+            
+            // 添加鼠标移动事件，用于显示像素信息
+            this.canvas.addEventListener('mousemove', (event) => {
+                if (!this.ready || !this.rawData) return;
+                
+                // 获取鼠标在画布上的坐标
+                const rect = this.canvas.getBoundingClientRect();
+                const scaleX = this.canvas.width / rect.width;
+                const scaleY = this.canvas.height / rect.height;
+                
+                const x = Math.floor((event.clientX - rect.left) * scaleX);
+                const y = Math.floor((event.clientY - rect.top) * scaleY);
+                
+                // 确保坐标在画布范围内
+                if (x >= 0 && x < this.canvas.width && y >= 0 && y < this.canvas.height) {
+                    // 获取像素数据
+                    const pixelData = this.ctx.getImageData(x, y, 1, 1).data;
+                    
+                    // 更新状态栏信息
+                    this.cursorPosElement.textContent = `坐标: (${x}, ${y})`;
+                    this.pixelInfoElement.textContent = `像素: (${pixelData[0]}, ${pixelData[1]}, ${pixelData[2]})`;
+                }
+            });
+            
+            // 鼠标离开画布时重置状态栏
+            this.canvas.addEventListener('mouseout', () => {
+                this.cursorPosElement.textContent = '坐标: (0, 0)';
+                this.pixelInfoElement.textContent = '像素: (0, 0, 0)';
             });
         }
 
@@ -96,6 +130,9 @@
             // 将图像数据绘制到画布上
             this.ctx.putImageData(imageData, 0, 0);
             this.ready = true;
+            
+            // 更新状态栏中的图像尺寸信息
+            this.imageSizeElement.textContent = `图像尺寸: ${width}×${height}`;
         }
 
         /**

@@ -141,7 +141,14 @@ export class RawImageViewerProvider implements vscode.CustomReadonlyEditorProvid
                         </div>
                         <button id="apply-params-btn">应用参数</button>
                     </div>
-                    <canvas class="raw-image-canvas"></canvas>
+                    <div class="image-container">
+                        <canvas class="raw-image-canvas"></canvas>
+                    </div>
+                </div>
+                <div class="status-bar">
+                    <div class="status-bar-item" id="image-size">图像尺寸: 0×0</div>
+                    <div class="status-bar-item" id="pixel-info">像素: (0,0,0)</div>
+                    <div class="status-bar-item" id="cursor-pos">坐标: (0,0)</div>
                 </div>
                 <script nonce="${nonce}" src="${scriptUri}"></script>
             </body>
