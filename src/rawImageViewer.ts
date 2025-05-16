@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { Disposable, disposeAll } from './dispose';
-import { getNonce } from './util';
 
 class RawImageDocument extends Disposable implements vscode.CustomDocument {
     private readonly _uri: vscode.Uri;
@@ -63,7 +62,7 @@ export class RawImageViewerProvider implements vscode.CustomReadonlyEditorProvid
             });
     }
 
-    private readonly webviews = new Map<string, vscode.WebviewPanel>();
+    private readonly webviewPanelMap = new Map<string, vscode.WebviewPanel>();
 
     async openCustomDocument(
         uri: vscode.Uri,
@@ -79,7 +78,7 @@ export class RawImageViewerProvider implements vscode.CustomReadonlyEditorProvid
         webviewPanel: vscode.WebviewPanel,
         _token: vscode.CancellationToken
     ): Promise<void> {
-        this.webviews.set(document.uri.toString(), webviewPanel);
+        this.webviewPanelMap.set(document.uri.toString(), webviewPanel);
 
         const mediaBuildPath = vscode.Uri.joinPath(this._context.extensionUri, 'dist', 'media');
 
@@ -93,12 +92,11 @@ export class RawImageViewerProvider implements vscode.CustomReadonlyEditorProvid
 
         // Clean up resources when the panel is disposed
         webviewPanel.onDidDispose(() => {
-            this.webviews.delete(document.uri.toString());
+            this.webviewPanelMap.delete(document.uri.toString());
         });
     }
 
     private async getHtmlForWebview(webview: vscode.Webview): Promise<string> {
-        const nonce = getNonce();
         const extensionUri = this._context.extensionUri;
 
         const mediaBuildPath = vscode.Uri.joinPath(extensionUri, 'dist', 'media');
@@ -115,13 +113,6 @@ export class RawImageViewerProvider implements vscode.CustomReadonlyEditorProvid
             return `<html><body>Error loading extension. Vite build output not found at ${indexPath.fsPath}. Please ensure the UI is built (e.g., 'npm run build' in the media folder).</body></html>`;
         }
 
-        // Add nonce to script tags
-        htmlContent = htmlContent.replace(
-            /<script (.*?)src="(.+?)"(.*?)><\/script>/g,
-            (match, preAttributes, srcPath, postAttributes) => {
-                return `<script ${preAttributes}src="${srcPath}"${postAttributes} nonce="${nonce}"></script>`;
-            }
-        );
 
         // Ensure the <base> tag is correctly set for webview resource loading
         const baseTag = `<base href="${baseUri}/">`;
@@ -131,36 +122,10 @@ export class RawImageViewerProvider implements vscode.CustomReadonlyEditorProvid
             htmlContent = htmlContent.replace('<head>', `<head>\n    ${baseTag}`);
         }
 
-        // Update or inject Content Security Policy
-        const cspSource = webview.cspSource; // Typically 'vscode-webview-resource:'
-        const csp = `
-            default-src 'none';
-            img-src ${cspSource} blob: data:;
-            style-src ${cspSource} 'unsafe-inline' ${baseUri};
-            script-src 'nonce-${nonce}';
-            font-src ${cspSource} ${baseUri};
-            connect-src ${cspSource};
-        `.replace(/\s{2,}/g, ' ').trim();
-
-        const cspMetaTag = `<meta http-equiv="Content-Security-Policy" content="${csp}">`;
-        if (htmlContent.includes('<meta http-equiv="Content-Security-Policy"')) {
-            htmlContent = htmlContent.replace(/<meta http-equiv="Content-Security-Policy" content=".*?">/, cspMetaTag);
-        } else {
-            htmlContent = htmlContent.replace('<head>', `<head>\n    ${cspMetaTag}`);
-        }
-
         return htmlContent;
     }
 
-    private _requestId = 1;
     private readonly _callbacks = new Map<number, (response: any) => void>();
-
-    private postMessageWithResponse<R = unknown>(panel: vscode.WebviewPanel, type: string, body: any): Promise<R> {
-        const requestId = this._requestId++;
-        const p = new Promise<R>(resolve => this._callbacks.set(requestId, resolve));
-        panel.webview.postMessage({ type, requestId, body });
-        return p;
-    }
 
     private postMessage(panel: vscode.WebviewPanel, type: string, body: any): void {
         panel.webview.postMessage({ type, body });

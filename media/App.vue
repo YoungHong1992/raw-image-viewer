@@ -1,28 +1,30 @@
 <template>
-  <div class="raw-image-container">
-    <div class="image-params-form">
-      <div class="form-group">
-        <label for="image-width">宽度:</label>
-        <input type="number" id="image-width" v-model.number="width" min="1" />
+  <div class="app-main-layout">
+    <div class="raw-image-container">
+      <div class="image-params-form">
+        <div class="form-group">
+          <label for="image-width">宽度:</label>
+          <input type="number" id="image-width" v-model.number="width" min="1" />
+        </div>
+        <div class="form-group">
+          <label for="image-height">高度:</label>
+          <input type="number" id="image-height" v-model.number="height" min="1" />
+        </div>
+        <div class="form-group">
+          <label for="bits-per-pixel">每像素位数:</label>
+          <input type="number" id="bits-per-pixel" v-model.number="bitsPerPixel" min="1" max="16" />
+        </div>
+        <button id="apply-params-btn" @click="applyParams">应用参数</button>
       </div>
-      <div class="form-group">
-        <label for="image-height">高度:</label>
-        <input type="number" id="image-height" v-model.number="height" min="1" />
+      <div class="image-container">
+        <canvas ref="canvas" class="raw-image-canvas" @mousemove="handleMouseMove" @mouseout="handleMouseOut"></canvas>
       </div>
-      <div class="form-group">
-        <label for="bits-per-pixel">每像素位数:</label>
-        <input type="number" id="bits-per-pixel" v-model.number="bitsPerPixel" min="1" max="16" />
-      </div>
-      <button id="apply-params-btn" @click="applyParams">应用参数</button>
     </div>
-    <div class="image-container">
-      <canvas ref="canvas" class="raw-image-canvas" @mousemove="handleMouseMove" @mouseout="handleMouseOut"></canvas>
+    <div class="status-bar">
+      <div class="status-bar-item" id="image-size">图像尺寸: {{ canvasWidth }}×{{ canvasHeight }}</div>
+      <div class="status-bar-item" id="pixel-info">像素: ({{ pixelR }}, {{ pixelG }}, {{ pixelB }})</div>
+      <div class="status-bar-item" id="cursor-pos">坐标: ({{ cursorX }}, {{ cursorY }})</div>
     </div>
-  </div>
-  <div class="status-bar">
-    <div class="status-bar-item" id="image-size">图像尺寸: {{ canvasWidth }}×{{ canvasHeight }}</div>
-    <div class="status-bar-item" id="pixel-info">像素: ({{ pixelR }}, {{ pixelG }}, {{ pixelB }})</div>
-    <div class="status-bar-item" id="cursor-pos">坐标: ({{ cursorX }}, {{ cursorY }})</div>
   </div>
 </template>
 
@@ -187,10 +189,18 @@ body {
   font-size: var(--vscode-font-size);
 }
 
+.app-main-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
 .raw-image-container {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 30px); /* Full height minus status bar */
+  /* height: calc(100vh - 30px); */ /* Full height minus status bar */
+  flex-grow: 1;
+  overflow: hidden; /* Manage its own overflow, prevent affecting app-main-layout */
   padding: 10px;
   box-sizing: border-box;
 }
@@ -263,10 +273,11 @@ body {
   background-color: var(--vscode-statusBar-background, #007acc);
   color: var(--vscode-statusBar-foreground, white);
   padding: 0 10px;
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  /* position: fixed; */
+  /* bottom: 0; */
+  /* left: 0; */
+  /* right: 0; */
+  flex-shrink: 0;
   font-size: var(--vscode-font-size);
   border-top: 1px solid var(--vscode-statusBar-border, transparent);
 }
