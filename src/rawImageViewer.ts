@@ -81,78 +81,75 @@ export class RawImageViewerProvider implements vscode.CustomReadonlyEditorProvid
     ): Promise<void> {
         this.webviews.set(document.uri.toString(), webviewPanel);
 
+        const mediaBuildPath = vscode.Uri.joinPath(this._context.extensionUri, 'dist', 'media');
+
         webviewPanel.webview.options = {
             enableScripts: true,
+            localResourceRoots: [mediaBuildPath]
         };
-        webviewPanel.webview.html = this.getHtmlForWebview(webviewPanel.webview);
+        webviewPanel.webview.html = await this.getHtmlForWebview(webviewPanel.webview);
 
-        webviewPanel.webview.onDidReceiveMessage(e => this.onMessage(document, e));
+        webviewPanel.webview.onDidReceiveMessage(e => this.onMessage(document, webviewPanel, e));
 
-        webviewPanel.webview.onDidReceiveMessage(e => {
-            if (e.type === 'ready') {
-                this.postMessage(webviewPanel, 'init', {
-                    value: document.documentData,
-                    editable: false
-                });
-            }
+        // Clean up resources when the panel is disposed
+        webviewPanel.onDidDispose(() => {
+            this.webviews.delete(document.uri.toString());
         });
     }
 
-    private getHtmlForWebview(webview: vscode.Webview): string {
-        const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(
-            this._context.extensionUri, 'media', 'rawImage.js'));
-
-        const styleResetUri = webview.asWebviewUri(vscode.Uri.joinPath(
-            this._context.extensionUri, 'media', 'reset.css'));
-
-        const styleVSCodeUri = webview.asWebviewUri(vscode.Uri.joinPath(
-            this._context.extensionUri, 'media', 'vscode.css'));
-
-        const styleMainUri = webview.asWebviewUri(vscode.Uri.joinPath(
-            this._context.extensionUri, 'media', 'rawImage.css'));
-
+    private async getHtmlForWebview(webview: vscode.Webview): Promise<string> {
         const nonce = getNonce();
+        const extensionUri = this._context.extensionUri;
 
-        return /* html */`
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} blob:; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <link href="${styleResetUri}" rel="stylesheet" />
-                <link href="${styleVSCodeUri}" rel="stylesheet" />
-                <link href="${styleMainUri}" rel="stylesheet" />
-                <title>Raw Image Viewer</title>
-            </head>
-            <body>
-                <div class="raw-image-container">
-                    <div class="image-params-form">
-                        <div class="form-group">
-                            <label for="image-width">宽度:</label>
-                            <input type="number" id="image-width" value="2688" min="1" />
-                        </div>
-                        <div class="form-group">
-                            <label for="image-height">高度:</label>
-                            <input type="number" id="image-height" value="1520" min="1" />
-                        </div>
-                        <div class="form-group">
-                            <label for="bits-per-pixel">每像素位数:</label>
-                            <input type="number" id="bits-per-pixel" value="10" min="1" max="16" />
-                        </div>
-                        <button id="apply-params-btn">应用参数</button>
-                    </div>
-                    <div class="image-container">
-                        <canvas class="raw-image-canvas"></canvas>
-                    </div>
-                </div>
-                <div class="status-bar">
-                    <div class="status-bar-item" id="image-size">图像尺寸: 0×0</div>
-                    <div class="status-bar-item" id="pixel-info">像素: (0,0,0)</div>
-                    <div class="status-bar-item" id="cursor-pos">坐标: (0,0)</div>
-                </div>
-                <script nonce="${nonce}" src="${scriptUri}"></script>
-            </body>
-            </html>`;
+        const mediaBuildPath = vscode.Uri.joinPath(extensionUri, 'dist', 'media');
+        const baseUri = webview.asWebviewUri(mediaBuildPath);
+
+        const indexPath = vscode.Uri.joinPath(mediaBuildPath, 'index.html');
+
+        let htmlContent: string;
+        try {
+            const indexFileContentBytes = await vscode.workspace.fs.readFile(indexPath);
+            htmlContent = new TextDecoder().decode(indexFileContentBytes);
+        } catch (e) {
+            console.error(`Error reading Vite's index.html: ${indexPath.fsPath}`, e);
+            return `<html><body>Error loading extension. Vite build output not found at ${indexPath.fsPath}. Please ensure the UI is built (e.g., 'npm run build' in the media folder).</body></html>`;
+        }
+
+        // Add nonce to script tags
+        htmlContent = htmlContent.replace(
+            /<script (.*?)src="(.+?)"(.*?)><\/script>/g,
+            (match, preAttributes, srcPath, postAttributes) => {
+                return `<script ${preAttributes}src="${srcPath}"${postAttributes} nonce="${nonce}"></script>`;
+            }
+        );
+
+        // Ensure the <base> tag is correctly set for webview resource loading
+        const baseTag = `<base href="${baseUri}/">`;
+        if (htmlContent.includes('<base href')) {
+            htmlContent = htmlContent.replace(/<base href=".*?"\/?>/, baseTag);
+        } else {
+            htmlContent = htmlContent.replace('<head>', `<head>\n    ${baseTag}`);
+        }
+
+        // Update or inject Content Security Policy
+        const cspSource = webview.cspSource; // Typically 'vscode-webview-resource:'
+        const csp = `
+            default-src 'none';
+            img-src ${cspSource} blob: data:;
+            style-src ${cspSource} 'unsafe-inline' ${baseUri};
+            script-src 'nonce-${nonce}';
+            font-src ${cspSource} ${baseUri};
+            connect-src ${cspSource};
+        `.replace(/\s{2,}/g, ' ').trim();
+
+        const cspMetaTag = `<meta http-equiv="Content-Security-Policy" content="${csp}">`;
+        if (htmlContent.includes('<meta http-equiv="Content-Security-Policy"')) {
+            htmlContent = htmlContent.replace(/<meta http-equiv="Content-Security-Policy" content=".*?">/, cspMetaTag);
+        } else {
+            htmlContent = htmlContent.replace('<head>', `<head>\n    ${cspMetaTag}`);
+        }
+
+        return htmlContent;
     }
 
     private _requestId = 1;
@@ -169,8 +166,14 @@ export class RawImageViewerProvider implements vscode.CustomReadonlyEditorProvid
         panel.webview.postMessage({ type, body });
     }
 
-    private onMessage(document: RawImageDocument, message: any) {
+    private onMessage(document: RawImageDocument, panel: vscode.WebviewPanel, message: any) {
         switch (message.type) {
+            case 'ready':
+                this.postMessage(panel, 'init', {
+                    value: document.documentData,
+                    editable: false
+                });
+                return;
             case 'response': {
                 const callback = this._callbacks.get(message.requestId);
                 callback?.(message.body);
