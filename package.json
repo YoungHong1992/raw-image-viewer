@@ -1,8 +1,8 @@
 {
   "name": "raw-image-viewer",
   "displayName": "RawImageViewer",
-  "description": "",
-  "version": "0.0.1",
+  "description": "Advanced RAW image viewer with smart resolution recommendations and multiple pixel format support",
+  "version": "0.0.2",
   "publisher": "YoungHong1992",
   "engines": {
     "vscode": "^1.91.0"
@@ -35,12 +35,15 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run build-extension && npm run build-webview",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
+    "watch-extension": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
-    "test": "vscode-test"
+    "test": "vscode-test",
+    "dev-webview": "vite --config vite.config.js",
+    "build-webview": "vite build --config vite.config.js",
+    "build-extension": "npm run compile"
   },
   "devDependencies": {
     "@types/vscode": "^1.91.0",
@@ -51,6 +54,9 @@
     "eslint": "^8.57.0",
     "typescript": "^5.4.5",
     "@vscode/test-cli": "^0.0.9",
-    "@vscode/test-electron": "^2.4.0"
+    "@vscode/test-electron": "^2.4.0",
+    "vue": "^3.4.27",
+    "vite": "^5.2.11",
+    "@vitejs/plugin-vue": "^5.0.5"
   }
 }
