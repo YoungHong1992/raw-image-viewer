@@ -4,6 +4,39 @@ All notable changes to the "raw-image-viewer" extension will be documented in th
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.0.3] - 2025-01-27
+
+### Added
+- **Photoshop-like Transparent Background**: Added checkerboard pattern background similar to Photoshop to clearly distinguish image from background
+- **Pixel-Perfect Zoom**: Implemented pixel-level zoom functionality (0.1x to 32x) without smoothing, allowing users to see individual pixels clearly
+- **Image Dragging**: Added drag functionality for panning around zoomed images using mouse
+- **Enhanced Zoom Controls**:
+  - Zoom in/out buttons with tooltips
+  - 1:1 reset zoom button
+  - Fit to window button
+  - Ctrl+Mouse wheel zoom support
+  - Keyboard shortcuts (Ctrl+Plus, Ctrl+Minus, Ctrl+0)
+- **Accurate Mouse Coordinates**: Precise pixel coordinate tracking that works correctly at all zoom levels
+- **Smart Minimum Zoom**: Dynamic minimum zoom calculation (50% of fit-to-window scale)
+
+### Enhanced
+- **Improved Status Bar**: Fixed status bar to always remain visible and not be affected by other controls
+- **Better Image Processing**: Complete implementation of grayscale, RGB, and Bayer image processing functions
+- **Responsive Layout**: Fixed layout issues to prevent status bar from being pushed off screen
+- **User Experience**: Added proper cursor styles (grab/grabbing) and drag constraints
+
+### Fixed
+- Status bar disappearing when image is zoomed in
+- Mouse coordinate calculation accuracy at different zoom levels
+- Layout stability with proper flex box implementation
+- Image positioning and offset calculations
+
+### Technical Improvements
+- Complete Vue.js component implementation with all missing functions
+- Proper event handling for mouse interactions
+- Optimized rendering with pixel-perfect display
+- Better memory management for image data
+
 ## [0.0.2] - 2025-06-11
 
 ### Added
