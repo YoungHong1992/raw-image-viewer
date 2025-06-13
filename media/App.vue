@@ -71,10 +71,22 @@
       </div>
 
       <div class="image-container">
-        <canvas ref="canvas" class="raw-image-canvas" @mousemove="handleMouseMove" @mouseout="handleMouseOut"></canvas>
+        <canvas ref="canvas" class="raw-image-canvas"
+                @mousemove="handleMouseMove"
+                @mouseout="handleMouseOut"
+                @mousedown="handleMouseDown"
+                @mouseup="handleMouseUp"
+                @wheel="handleWheel"></canvas>
         <div v-if="!ready && rawData" class="loading-overlay">
           <div class="loading-spinner"></div>
           <div>处理图像中...</div>
+        </div>
+        <div class="zoom-controls">
+          <button @click="zoomOut" title="缩小">-</button>
+          <span>{{ Math.round(zoomLevel * 100) }}%</span>
+          <button @click="zoomIn" title="放大">+</button>
+          <button @click="resetZoom" title="重置缩放">1:1</button>
+          <button @click="fitToWindow" title="适应窗口">适应</button>
         </div>
       </div>
     </div>
@@ -112,6 +124,12 @@ const pixelG = ref(0);
 const pixelB = ref(0);
 const cursorX = ref(0);
 const cursorY = ref(0);
+
+// 拖拽相关状态
+const isDragging = ref(false);
+const dragStart = ref({ x: 0, y: 0 });
+const imageOffset = ref({ x: 0, y: 0 });
+const lastImageOffset = ref({ x: 0, y: 0 });
 
 // 常用分辨率预设
 const commonResolutions = ref([
@@ -207,6 +225,30 @@ const applyRecommendation = (rec) => {
   applyParams();
 };
 
+const zoomLevel = ref(1);
+let minZoom = 0.1; // 动态计算的最小缩放
+const maxZoom = 32;
+
+// 存储原始图像数据用于缩放
+let originalImageData = null;
+
+// 改进的透明格子背景绘制函数，类似Photoshop
+const drawCheckerboard = (ctx, width, height, cellSize = 16) => {
+  ctx.save();
+  // 使用更接近Photoshop的颜色
+  const lightColor = '#ffffff';
+  const darkColor = '#cccccc';
+
+  for (let y = 0; y < height; y += cellSize) {
+    for (let x = 0; x < width; x += cellSize) {
+      const isLight = ((Math.floor(x / cellSize) + Math.floor(y / cellSize)) % 2 === 0);
+      ctx.fillStyle = isLight ? lightColor : darkColor;
+      ctx.fillRect(x, y, cellSize, cellSize);
+    }
+  }
+  ctx.restore();
+};
+
 const displayRawImage = async (data, imgWidth, imgHeight, bpp, format = 'grayscale') => {
   if (!canvas.value) return;
   ready.value = false;
@@ -215,17 +257,17 @@ const displayRawImage = async (data, imgWidth, imgHeight, bpp, format = 'graysca
   setTimeout(() => {
     try {
       ctx = canvas.value.getContext('2d');
-
+      // 设置canvas实际像素尺寸
       canvas.value.width = imgWidth;
       canvas.value.height = imgHeight;
       canvasWidth.value = imgWidth;
       canvasHeight.value = imgHeight;
-
+      // 绘制透明格子背景
+      drawCheckerboard(ctx, imgWidth, imgHeight);
       const imageData = ctx.createImageData(imgWidth, imgHeight);
       const pixels = imageData.data;
       const bytesPerPixelVal = Math.ceil(bpp / 8);
       const maxValue = Math.pow(2, bpp) - 1;
-
       let requiredBytes;
       if (format === 'rgb') {
         requiredBytes = imgWidth * imgHeight * bytesPerPixelVal * 3;
@@ -258,8 +300,18 @@ const displayRawImage = async (data, imgWidth, imgHeight, bpp, format = 'graysca
         processGrayscaleImage(data, pixels, imgWidth, imgHeight, bpp, bytesPerPixelVal, maxValue);
       }
 
+      // 保存原始图像数据用于鼠标坐标计算
+      originalImageData = imageData;
+
       ctx.putImageData(imageData, 0, 0);
       ready.value = true;
+
+      // 初始化时计算合适的最小缩放值
+      setTimeout(() => {
+        fitToWindow();
+      }, 100);
+
+      drawZoomed();
     } catch (error) {
       console.error('Error processing image:', error);
       ready.value = true;
@@ -273,12 +325,14 @@ const processGrayscaleImage = (data, pixels, imgWidth, imgHeight, bpp, bytesPerP
     for (let x = 0; x < imgWidth; x++) {
       const pixelIndex = (y * imgWidth + x) * bytesPerPixelVal;
       const outputIndex = (y * imgWidth + x) * 4;
-      let pixelValue = 0;
 
+      let pixelValue = 0;
       if (bpp <= 8) {
-        pixelValue = data[pixelIndex];
+        pixelValue = data[pixelIndex] || 0;
       } else if (bpp <= 16) {
-        pixelValue = data[pixelIndex] | (data[pixelIndex + 1] << 8);
+        const byte1 = data[pixelIndex] || 0;
+        const byte2 = data[pixelIndex + 1] || 0;
+        pixelValue = byte1 | (byte2 << 8);
         const extraBits = 16 - bpp;
         if (extraBits > 0) {
           pixelValue = pixelValue >> extraBits;
@@ -286,10 +340,10 @@ const processGrayscaleImage = (data, pixels, imgWidth, imgHeight, bpp, bytesPerP
       }
 
       const normalizedValue = Math.floor((pixelValue / maxValue) * 255);
-      pixels[outputIndex] = normalizedValue;
-      pixels[outputIndex + 1] = normalizedValue;
-      pixels[outputIndex + 2] = normalizedValue;
-      pixels[outputIndex + 3] = 255;
+      pixels[outputIndex] = normalizedValue;     // R
+      pixels[outputIndex + 1] = normalizedValue; // G
+      pixels[outputIndex + 2] = normalizedValue; // B
+      pixels[outputIndex + 3] = 255;             // A
     }
   }
 };
@@ -301,133 +355,341 @@ const processRGBImage = (data, pixels, imgWidth, imgHeight, bpp, bytesPerPixelVa
       const pixelIndex = (y * imgWidth + x) * bytesPerPixelVal * 3;
       const outputIndex = (y * imgWidth + x) * 4;
 
-      let rValue = 0, gValue = 0, bValue = 0;
+      for (let c = 0; c < 3; c++) {
+        let pixelValue = 0;
+        const channelIndex = pixelIndex + c * bytesPerPixelVal;
 
-      if (bpp <= 8) {
-        rValue = data[pixelIndex];
-        gValue = data[pixelIndex + bytesPerPixelVal];
-        bValue = data[pixelIndex + bytesPerPixelVal * 2];
-      } else if (bpp <= 16) {
-        rValue = data[pixelIndex] | (data[pixelIndex + 1] << 8);
-        gValue = data[pixelIndex + bytesPerPixelVal] | (data[pixelIndex + bytesPerPixelVal + 1] << 8);
-        bValue = data[pixelIndex + bytesPerPixelVal * 2] | (data[pixelIndex + bytesPerPixelVal * 2 + 1] << 8);
+        if (bpp <= 8) {
+          pixelValue = data[channelIndex] || 0;
+        } else if (bpp <= 16) {
+          const byte1 = data[channelIndex] || 0;
+          const byte2 = data[channelIndex + 1] || 0;
+          pixelValue = byte1 | (byte2 << 8);
+          const extraBits = 16 - bpp;
+          if (extraBits > 0) {
+            pixelValue = pixelValue >> extraBits;
+          }
+        }
 
-        const extraBits = 16 - bpp;
-        if (extraBits > 0) {
-          rValue = rValue >> extraBits;
-          gValue = gValue >> extraBits;
-          bValue = bValue >> extraBits;
+        const normalizedValue = Math.floor((pixelValue / maxValue) * 255);
+        pixels[outputIndex + c] = normalizedValue;
+      }
+      pixels[outputIndex + 3] = 255; // A
+    }
+  }
+};
+
+// 处理Bayer图像（简单去马赛克）
+const processBayerImage = (data, pixels, imgWidth, imgHeight, bpp, bytesPerPixelVal, maxValue, format) => {
+  // 首先处理为灰度图像
+  processGrayscaleImage(data, pixels, imgWidth, imgHeight, bpp, bytesPerPixelVal, maxValue);
+
+  // 简单的Bayer去马赛克算法
+  const tempPixels = new Uint8ClampedArray(pixels);
+
+  for (let y = 1; y < imgHeight - 1; y++) {
+    for (let x = 1; x < imgWidth - 1; x++) {
+      const outputIndex = (y * imgWidth + x) * 4;
+      let r = 0, g = 0, b = 0;
+
+      // 根据Bayer模式确定当前像素的颜色
+      const isEvenRow = y % 2 === 0;
+      const isEvenCol = x % 2 === 0;
+
+      if (format === 'rggb') {
+        if (isEvenRow && isEvenCol) { // R
+          r = tempPixels[outputIndex];
+          g = (tempPixels[((y-1) * imgWidth + x) * 4] + tempPixels[((y+1) * imgWidth + x) * 4] +
+               tempPixels[(y * imgWidth + (x-1)) * 4] + tempPixels[(y * imgWidth + (x+1)) * 4]) / 4;
+          b = (tempPixels[((y-1) * imgWidth + (x-1)) * 4] + tempPixels[((y-1) * imgWidth + (x+1)) * 4] +
+               tempPixels[((y+1) * imgWidth + (x-1)) * 4] + tempPixels[((y+1) * imgWidth + (x+1)) * 4]) / 4;
+        } else if (isEvenRow && !isEvenCol) { // G
+          g = tempPixels[outputIndex];
+          r = (tempPixels[(y * imgWidth + (x-1)) * 4] + tempPixels[(y * imgWidth + (x+1)) * 4]) / 2;
+          b = (tempPixels[((y-1) * imgWidth + x) * 4] + tempPixels[((y+1) * imgWidth + x) * 4]) / 2;
+        } else if (!isEvenRow && isEvenCol) { // G
+          g = tempPixels[outputIndex];
+          r = (tempPixels[((y-1) * imgWidth + x) * 4] + tempPixels[((y+1) * imgWidth + x) * 4]) / 2;
+          b = (tempPixels[(y * imgWidth + (x-1)) * 4] + tempPixels[(y * imgWidth + (x+1)) * 4]) / 2;
+        } else { // B
+          b = tempPixels[outputIndex];
+          g = (tempPixels[((y-1) * imgWidth + x) * 4] + tempPixels[((y+1) * imgWidth + x) * 4] +
+               tempPixels[(y * imgWidth + (x-1)) * 4] + tempPixels[(y * imgWidth + (x+1)) * 4]) / 4;
+          r = (tempPixels[((y-1) * imgWidth + (x-1)) * 4] + tempPixels[((y-1) * imgWidth + (x+1)) * 4] +
+               tempPixels[((y+1) * imgWidth + (x-1)) * 4] + tempPixels[((y+1) * imgWidth + (x+1)) * 4]) / 4;
         }
       }
+      // 可以添加其他Bayer模式的处理...
 
-      pixels[outputIndex] = Math.floor((rValue / maxValue) * 255);
-      pixels[outputIndex + 1] = Math.floor((gValue / maxValue) * 255);
-      pixels[outputIndex + 2] = Math.floor((bValue / maxValue) * 255);
+      pixels[outputIndex] = Math.min(255, Math.max(0, r));
+      pixels[outputIndex + 1] = Math.min(255, Math.max(0, g));
+      pixels[outputIndex + 2] = Math.min(255, Math.max(0, b));
       pixels[outputIndex + 3] = 255;
     }
   }
 };
 
-// 处理Bayer图像（简单的去马赛克算法）
-const processBayerImage = (data, pixels, imgWidth, imgHeight, bpp, bytesPerPixelVal, maxValue, pattern) => {
-  // 简单的双线性插值去马赛克
-  const bayerPattern = getBayerPattern(pattern);
+// 更新图像位置
+const updateImagePosition = () => {
+  if (!canvas.value) return;
 
-  for (let y = 0; y < imgHeight; y++) {
-    for (let x = 0; x < imgWidth; x++) {
-      const pixelIndex = (y * imgWidth + x) * bytesPerPixelVal;
-      const outputIndex = (y * imgWidth + x) * 4;
-
-      let pixelValue = 0;
-      if (bpp <= 8) {
-        pixelValue = data[pixelIndex];
-      } else if (bpp <= 16) {
-        pixelValue = data[pixelIndex] | (data[pixelIndex + 1] << 8);
-        const extraBits = 16 - bpp;
-        if (extraBits > 0) {
-          pixelValue = pixelValue >> extraBits;
-        }
-      }
-
-      const normalizedValue = Math.floor((pixelValue / maxValue) * 255);
-      const colorChannel = bayerPattern[y % 2][x % 2];
-
-      // 简单处理：将Bayer值分配到对应颜色通道
-      if (colorChannel === 'R') {
-        pixels[outputIndex] = normalizedValue;     // R
-        pixels[outputIndex + 1] = normalizedValue * 0.5; // G
-        pixels[outputIndex + 2] = normalizedValue * 0.3; // B
-      } else if (colorChannel === 'G') {
-        pixels[outputIndex] = normalizedValue * 0.3;     // R
-        pixels[outputIndex + 1] = normalizedValue;       // G
-        pixels[outputIndex + 2] = normalizedValue * 0.3; // B
-      } else if (colorChannel === 'B') {
-        pixels[outputIndex] = normalizedValue * 0.3;     // R
-        pixels[outputIndex + 1] = normalizedValue * 0.5; // G
-        pixels[outputIndex + 2] = normalizedValue;       // B
-      }
-      pixels[outputIndex + 3] = 255; // Alpha
-    }
-  }
+  canvas.value.style.transform = `translate(${imageOffset.value.x}px, ${imageOffset.value.y}px)`;
 };
 
-// 获取Bayer模式
-const getBayerPattern = (pattern) => {
-  switch (pattern.toLowerCase()) {
-    case 'rggb':
-      return [['R', 'G'], ['G', 'B']];
-    case 'grbg':
-      return [['G', 'R'], ['B', 'G']];
-    case 'gbrg':
-      return [['G', 'B'], ['R', 'G']];
-    case 'bggr':
-      return [['B', 'G'], ['G', 'R']];
-    default:
-      return [['R', 'G'], ['G', 'B']]; // 默认RGGB
-  }
+const drawZoomed = () => {
+  if (!canvas.value || !ctx) return;
+  const displayWidth = canvasWidth.value * zoomLevel.value;
+  const displayHeight = canvasHeight.value * zoomLevel.value;
+  canvas.value.style.width = displayWidth + 'px';
+  canvas.value.style.height = displayHeight + 'px';
+
+  // 确保像素级渲染
+  canvas.value.style.imageRendering = 'pixelated';
+  canvas.value.style.imageRendering = '-moz-crisp-edges';
+  canvas.value.style.imageRendering = 'crisp-edges';
+
+  // 更新鼠标样式
+  canvas.value.style.cursor = zoomLevel.value > 1 ? 'grab' : 'default';
+
+  // 更新图像位置
+  updateImagePosition();
 };
 
+// 应用参数函数
 const applyParams = () => {
-  if (rawData.value) {
+  if (rawData.value && rawData.value.length > 0) {
     displayRawImage(rawData.value, width.value, height.value, bitsPerPixel.value, pixelFormat.value);
   }
 };
 
+// 鼠标移动处理
 const handleMouseMove = (event) => {
-  if (!ready.value || !rawData.value || !canvas.value) return;
+  if (!canvas.value || !ready.value) return;
+
+  // 处理拖拽
+  if (isDragging.value) {
+    handleDragMove(event);
+    return;
+  }
 
   const rect = canvas.value.getBoundingClientRect();
-  const scaleX = canvas.value.width / rect.width;
-  const scaleY = canvas.value.height / rect.height;
+  const scaleX = canvasWidth.value / rect.width;
+  const scaleY = canvasHeight.value / rect.height;
 
-  const x = Math.floor((event.clientX - rect.left) * scaleX);
-  const y = Math.floor((event.clientY - rect.top) * scaleY);
+  // 计算在原始图像中的坐标，考虑图像偏移
+  const canvasX = (event.clientX - rect.left) * scaleX;
+  const canvasY = (event.clientY - rect.top) * scaleY;
+
+  // 考虑图像偏移计算实际像素坐标
+  const x = Math.floor(canvasX - imageOffset.value.x / zoomLevel.value);
+  const y = Math.floor(canvasY - imageOffset.value.y / zoomLevel.value);
 
   cursorX.value = x;
   cursorY.value = y;
 
-  if (x >= 0 && x < canvas.value.width && y >= 0 && y < canvas.value.height) {
-    const pixelData = ctx.getImageData(x, y, 1, 1).data;
-    pixelR.value = pixelData[0];
-    pixelG.value = pixelData[1];
-    pixelB.value = pixelData[2];
-  } else {
-    pixelR.value = 0;
-    pixelG.value = 0;
-    pixelB.value = 0;
+  // 获取像素值
+  if (x >= 0 && x < canvasWidth.value && y >= 0 && y < canvasHeight.value && originalImageData) {
+    const pixelIndex = (y * canvasWidth.value + x) * 4;
+    pixelR.value = originalImageData.data[pixelIndex];
+    pixelG.value = originalImageData.data[pixelIndex + 1];
+    pixelB.value = originalImageData.data[pixelIndex + 2];
   }
 };
 
+// 鼠标离开处理
 const handleMouseOut = () => {
-  cursorX.value = 0;
-  cursorY.value = 0;
+  cursorX.value = -1;
+  cursorY.value = -1;
   pixelR.value = 0;
   pixelG.value = 0;
   pixelB.value = 0;
+  // 停止拖拽
+  isDragging.value = false;
 };
+
+// 鼠标按下开始拖拽
+const handleMouseDown = (event) => {
+  if (event.button === 0 && zoomLevel.value > 1) { // 只在左键且放大时启用拖拽
+    isDragging.value = true;
+    dragStart.value = {
+      x: event.clientX,
+      y: event.clientY
+    };
+    lastImageOffset.value = { ...imageOffset.value };
+
+    // 改变鼠标样式
+    if (canvas.value) {
+      canvas.value.style.cursor = 'grabbing';
+    }
+
+    event.preventDefault();
+  }
+};
+
+// 鼠标抬起结束拖拽
+const handleMouseUp = () => {
+  if (isDragging.value) {
+    isDragging.value = false;
+
+    // 恢复鼠标样式
+    if (canvas.value) {
+      canvas.value.style.cursor = zoomLevel.value > 1 ? 'grab' : 'default';
+    }
+  }
+};
+
+// 限制图像拖拽范围
+const constrainImageOffset = (offset) => {
+  if (!canvas.value) return offset;
+
+  const container = canvas.value.parentElement;
+  if (!container) return offset;
+
+  const containerRect = container.getBoundingClientRect();
+  const imageWidth = canvasWidth.value * zoomLevel.value;
+  const imageHeight = canvasHeight.value * zoomLevel.value;
+
+  // 计算允许的最大偏移量
+  const maxOffsetX = Math.max(0, (imageWidth - containerRect.width) / 2);
+  const maxOffsetY = Math.max(0, (imageHeight - containerRect.height) / 2);
+
+  return {
+    x: Math.max(-maxOffsetX, Math.min(maxOffsetX, offset.x)),
+    y: Math.max(-maxOffsetY, Math.min(maxOffsetY, offset.y))
+  };
+};
+
+// 拖拽移动处理
+const handleDragMove = (event) => {
+  if (!isDragging.value) return;
+
+  const deltaX = event.clientX - dragStart.value.x;
+  const deltaY = event.clientY - dragStart.value.y;
+
+  const newOffset = {
+    x: lastImageOffset.value.x + deltaX,
+    y: lastImageOffset.value.y + deltaY
+  };
+
+  // 限制拖拽范围
+  imageOffset.value = constrainImageOffset(newOffset);
+
+  updateImagePosition();
+  event.preventDefault();
+};
+
+const zoomIn = () => {
+  if (zoomLevel.value < maxZoom) {
+    zoomLevel.value = Math.min(maxZoom, zoomLevel.value * 2);
+    drawZoomed();
+  }
+};
+
+const zoomOut = () => {
+  if (zoomLevel.value > minZoom) {
+    zoomLevel.value = Math.max(minZoom, zoomLevel.value / 2);
+    drawZoomed();
+  }
+};
+
+const resetZoom = () => {
+  zoomLevel.value = 1;
+  // 重置图像位置
+  imageOffset.value = { x: 0, y: 0 };
+  drawZoomed();
+};
+
+const fitToWindow = () => {
+  if (!canvas.value) return;
+  const container = canvas.value.parentElement;
+  if (!container) return;
+
+  const containerRect = container.getBoundingClientRect();
+  const scaleX = (containerRect.width - 40) / canvasWidth.value;
+  const scaleY = (containerRect.height - 40) / canvasHeight.value;
+  const fitScale = Math.min(scaleX, scaleY, 1);
+
+  // 更新最小缩放为适应窗口的50%
+  minZoom = Math.max(0.05, fitScale * 0.5);
+
+  zoomLevel.value = Math.max(minZoom, Math.min(maxZoom, fitScale));
+  // 重置图像位置
+  imageOffset.value = { x: 0, y: 0 };
+  drawZoomed();
+};
+
+// 滚轮缩放支持
+const handleWheel = (event) => {
+  if (!event.ctrlKey) return;
+
+  event.preventDefault();
+  const delta = event.deltaY > 0 ? 0.9 : 1.1;
+  const newZoom = zoomLevel.value * delta;
+
+  if (newZoom >= minZoom && newZoom <= maxZoom) {
+    zoomLevel.value = newZoom;
+    drawZoomed();
+  }
+};
+
+watch(zoomLevel, () => {
+  drawZoomed();
+});
 
 onMounted(() => {
   ctx = canvas.value.getContext('2d');
+  drawZoomed();
+
+  // 添加全局鼠标事件监听器，处理拖拽
+  window.addEventListener('mouseup', handleMouseUp);
+  window.addEventListener('mousemove', (e) => {
+    if (isDragging.value) {
+      handleDragMove(e);
+    }
+  });
+
+  // 添加键盘快捷键支持
+  window.addEventListener('keydown', (e) => {
+    if (e.ctrlKey) {
+      switch (e.key) {
+        case '=':
+        case '+':
+          e.preventDefault();
+          zoomIn();
+          break;
+        case '-':
+          e.preventDefault();
+          zoomOut();
+          break;
+        case '0':
+          e.preventDefault();
+          resetZoom();
+          break;
+      }
+    }
+  });
+
+  // 监听窗口大小变化，动态调整最小缩放值
+  window.addEventListener('resize', () => {
+    if (canvasWidth.value > 0 && canvasHeight.value > 0) {
+      setTimeout(() => {
+        const container = canvas.value?.parentElement;
+        if (container) {
+          const containerRect = container.getBoundingClientRect();
+          const scaleX = (containerRect.width - 40) / canvasWidth.value;
+          const scaleY = (containerRect.height - 40) / canvasHeight.value;
+          const fitScale = Math.min(scaleX, scaleY, 1);
+          minZoom = Math.max(0.05, fitScale * 0.5);
+
+          // 如果当前缩放小于新的最小值，调整到最小值
+          if (zoomLevel.value < minZoom) {
+            zoomLevel.value = minZoom;
+            drawZoomed();
+          }
+        }
+      }, 100);
+    }
+  });
 
   window.addEventListener('message', async e => {
     const { type, body } = e.data;
@@ -482,13 +744,16 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  overflow: hidden; /* 防止整体滚动 */
 }
 
 .raw-image-container {
   display: flex;
   flex-direction: row;
-  flex-grow: 1;
+  flex: 1;
+  min-height: 0; /* 重要：允许flex子项收缩 */
   padding: 10px;
+  padding-bottom: 0; /* 为状态栏留出空间 */
   box-sizing: border-box;
   gap: 15px;
 }
@@ -501,7 +766,7 @@ body {
   border-radius: 4px;
   padding: 15px;
   overflow-y: auto;
-  max-height: calc(100vh - 80px);
+  flex-shrink: 0; /* 防止收缩 */
 }
 
 .controls-panel h3 {
@@ -588,6 +853,7 @@ body {
 
 .status-bar {
   height: 30px;
+  min-height: 30px; /* 确保最小高度 */
   background-color: var(--vscode-statusBar-background);
   color: var(--vscode-statusBar-foreground);
   width: 100%;
@@ -596,6 +862,8 @@ body {
   padding: 0 10px;
   gap: 20px;
   font-size: 12px;
+  flex-shrink: 0; /* 防止状态栏被压缩 */
+  border-top: 1px solid var(--vscode-statusBar-border, var(--vscode-sideBar-border));
 }
 
 .image-params-form {
@@ -647,7 +915,8 @@ body {
 }
 
 .image-container {
-  flex-grow: 1;
+  flex: 1;
+  min-height: 0; /* 重要：允许flex子项收缩 */
   display: flex;
   justify-content: center;
   align-items: center;
@@ -655,16 +924,75 @@ body {
   background-color: var(--vscode-editor-background);
   border: 1px solid var(--vscode-editorWidget-border);
   border-radius: 4px;
-  min-height: 200px;
   position: relative;
 }
 
 .raw-image-canvas {
-  max-width: 100%;
-  max-height: 100%;
+  max-width: none;
+  max-height: none;
   object-fit: contain;
   image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
   border-radius: 2px;
+  /* 透明背景格子，类似Photoshop */
+  background-image:
+    linear-gradient(45deg, #ffffff 25%, transparent 25%),
+    linear-gradient(-45deg, #ffffff 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #ffffff 75%),
+    linear-gradient(-45deg, transparent 75%, #ffffff 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+  background-color: #cccccc;
+  /* 拖拽相关样式 */
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  transition: cursor 0.1s ease;
+}
+.zoom-controls {
+  position: absolute;
+  right: 20px;
+  top: 20px;
+  background: var(--vscode-sideBar-background);
+  border: 1px solid var(--vscode-sideBar-border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  z-index: 20;
+  font-size: 12px;
+  color: var(--vscode-foreground);
+}
+.zoom-controls button {
+  min-width: 28px;
+  height: 24px;
+  font-size: 12px;
+  border: 1px solid var(--vscode-button-border);
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.2s;
+  padding: 2px 6px;
+}
+.zoom-controls button:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+.zoom-controls span {
+  min-width: 40px;
+  text-align: center;
+  font-weight: 500;
+}
+
+.status-bar-item {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .loading-overlay {
@@ -673,12 +1001,12 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
-  justify-content: center;
   align-items: center;
-  color: var(--vscode-foreground);
+  justify-content: center;
+  color: white;
   font-size: 14px;
   z-index: 10;
 }
@@ -686,8 +1014,8 @@ body {
 .loading-spinner {
   width: 32px;
   height: 32px;
-  border: 3px solid var(--vscode-progressBar-background);
-  border-top: 3px solid var(--vscode-button-background);
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top: 3px solid white;
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 10px;
@@ -696,12 +1024,5 @@ body {
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
-}
-
-.status-bar-item {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
 }
 </style>

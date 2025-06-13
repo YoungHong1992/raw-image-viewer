@@ -17,6 +17,14 @@ A Visual Studio Code extension for viewing RAW image files directly in the edito
   - Grayscale images
   - RGB images
   - Bayer pattern images (RGGB, GRBG, GBRG, BGGR) with basic demosaicing
+- **Advanced Zoom & Pan Features**:
+  - Pixel-perfect zoom (0.1x to 32x) without smoothing
+  - Photoshop-like transparent checkerboard background
+  - Drag to pan around zoomed images
+  - Multiple zoom controls (buttons, mouse wheel, keyboard shortcuts)
+  - Smart minimum zoom (50% of fit-to-window)
+- **Precise Mouse Tracking**: Accurate pixel coordinates and RGB values at all zoom levels
+- **Persistent Status Bar**: Always visible status bar with image info, pixel data, and coordinates
 - Customize image parameters:
   - Width and Height
   - Bits per pixel (8, 10, 12, 14, 16 bit)
@@ -38,6 +46,10 @@ A Visual Studio Code extension for viewing RAW image files directly in the edito
    - Pixel format: Choose between grayscale, RGB, or Bayer patterns
 6. Click "Apply Parameters" to update the view
 7. **Real-time Feedback**: Mouse over the image to see pixel values and coordinates
+8. **Zoom & Pan**:
+   - Use zoom controls or Ctrl+Mouse wheel to zoom in/out
+   - Drag the image to pan when zoomed in
+   - Use keyboard shortcuts: Ctrl+Plus (zoom in), Ctrl+Minus (zoom out), Ctrl+0 (reset)
 
 ### Requirements
 
@@ -55,7 +67,18 @@ The extension includes several example RAW files in the `exampleFiles` folder th
 
 ### Release Notes
 
-#### 0.0.2 (Latest)
+#### 0.0.3 (Latest)
+
+- **NEW**: Photoshop-like transparent checkerboard background
+- **NEW**: Pixel-perfect zoom (0.1x to 32x) without smoothing
+- **NEW**: Drag functionality for panning around zoomed images
+- **NEW**: Enhanced zoom controls with multiple input methods
+- **NEW**: Accurate mouse coordinate tracking at all zoom levels
+- **NEW**: Smart minimum zoom calculation (50% of fit-to-window)
+- **FIXED**: Status bar now always remains visible
+- **IMPROVED**: Better layout stability and user experience
+
+#### 0.0.2
 
 - **NEW**: Smart resolution recommendations based on file size
 - **NEW**: Common resolution presets (VGA, HD, 4K, camera resolutions)
@@ -86,6 +109,14 @@ The extension includes several example RAW files in the `exampleFiles` folder th
   - 灰度图像
   - RGB图像
   - Bayer模式图像（RGGB、GRBG、GBRG、BGGR）带基础去马赛克
+- **高级缩放和平移功能**：
+  - 像素级缩放（0.1x到32x），无平滑处理
+  - 类似Photoshop的透明格子背景
+  - 拖拽平移放大后的图像
+  - 多种缩放控制方式（按钮、鼠标滚轮、键盘快捷键）
+  - 智能最小缩放（适应窗口的50%）
+- **精确鼠标追踪**：在所有缩放级别下准确显示像素坐标和RGB值
+- **持久状态栏**：始终可见的状态栏，显示图像信息、像素数据和坐标
 - 自定义图像参数：
   - 宽度和高度
   - 每像素位数（8、10、12、14、16位）
@@ -107,6 +138,10 @@ The extension includes several example RAW files in the `exampleFiles` folder th
    - 像素格式：在灰度、RGB或Bayer模式之间选择
 6. 点击"应用参数"更新视图
 7. **实时反馈**：将鼠标悬停在图像上查看像素值和坐标
+8. **缩放和平移**：
+   - 使用缩放控件或Ctrl+鼠标滚轮进行缩放
+   - 放大时拖拽图像进行平移
+   - 使用键盘快捷键：Ctrl+加号（放大）、Ctrl+减号（缩小）、Ctrl+0（重置）
 
 ### 系统要求
 
@@ -124,7 +159,18 @@ The extension includes several example RAW files in the `exampleFiles` folder th
 
 ### 发布说明
 
-#### 0.0.2（最新版本）
+#### 0.0.3（最新版本）
+
+- **新增**：类似Photoshop的透明格子背景
+- **新增**：像素级缩放（0.1x到32x），无平滑处理
+- **新增**：拖拽功能，可平移放大后的图像
+- **新增**：增强的缩放控件，支持多种输入方式
+- **新增**：在所有缩放级别下准确的鼠标坐标追踪
+- **新增**：智能最小缩放计算（适应窗口的50%）
+- **修复**：状态栏现在始终保持可见
+- **改进**：更好的布局稳定性和用户体验
+
+#### 0.0.2
 
 - **新增**：基于文件大小的智能分辨率推荐
 - **新增**：常用分辨率预设（VGA、HD、4K、相机分辨率）

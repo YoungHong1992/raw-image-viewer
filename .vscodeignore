@@ -1,11 +1,36 @@
+# VS Code 相关
 .vscode/**
 .vscode-test/**
+**/.vscode-test.*
+
+# 源代码文件（已编译到out目录）
 src/**
+media/**
+**/*.ts
+**/*.map
+
+# 配置文件
 .gitignore
 .yarnrc
 vsc-extension-quickstart.md
 **/tsconfig.json
 **/.eslintrc.json
-**/*.map
-**/*.ts
-**/.vscode-test.*
+vite.config.js
+
+# 示例文件（用户不需要）
+exampleFiles/**
+
+# 开发依赖
+node_modules/**
+package-lock.json
+
+# 文档和说明
+README.md
+CHANGELOG.md
+
+# 测试文件
+**/test/**
+
+# 临时文件
+**/*.log
+**/*.tmp
