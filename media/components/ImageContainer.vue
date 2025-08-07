@@ -245,17 +245,24 @@ const processBayerImage = (data, pixels, imgWidth, imgHeight, bpp, bytesPerPixel
 
 const updateImagePosition = () => {
   if (!canvas.value) return;
-  canvas.value.style.transform = `translate(${imageOffset.value.x}px, ${imageOffset.value.y}px)`;
+  // Use transform for panning
+  const canvasEl = canvas.value;
+  canvasEl.style.transform = `translate(${imageOffset.value.x}px, ${imageOffset.value.y}px) scale(${zoomLevel.value})`;
 };
 
 const drawZoomed = () => {
   if (!canvas.value || !ctx) return;
-  canvas.value.style.width = (canvas.value.width * zoomLevel.value) + 'px';
-  canvas.value.style.height = (canvas.value.height * zoomLevel.value) + 'px';
-  canvas.value.style.imageRendering = 'pixelated';
-  canvas.value.style.cursor = zoomLevel.value > 1 ? 'grab' : 'default';
+  const canvasEl = canvas.value;
+  
+  // We now control scale via transform, so canvas width/height is static
+  canvasEl.style.width = width.value + 'px';
+  canvasEl.style.height = height.value + 'px';
+  
+  canvasEl.style.imageRendering = 'pixelated';
+  canvasEl.style.cursor = zoomLevel.value > 1 ? 'grab' : 'default';
   updateImagePosition();
 };
+
 
 const handleMouseMove = (event) => {
   if (!canvas.value || !ready.value) return;
@@ -264,8 +271,10 @@ const handleMouseMove = (event) => {
     return;
   }
   
-  const x = Math.floor(event.offsetX / zoomLevel.value);
-  const y = Math.floor(event.offsetY / zoomLevel.value);
+  // Correctly calculate mouse position on the original image
+  const rect = canvas.value.getBoundingClientRect();
+  const x = Math.floor((event.clientX - rect.left) / zoomLevel.value);
+  const y = Math.floor((event.clientY - rect.top) / zoomLevel.value);
 
   cursorX.value = x;
   cursorY.value = y;
@@ -287,7 +296,7 @@ const handleMouseOut = () => {
 };
 
 const handleMouseDown = (event) => {
-  if (event.button === 0 && zoomLevel.value > 1) {
+  if (event.button === 0) { // Pan with left click
     isDragging.value = true;
     dragStart.value = { x: event.clientX, y: event.clientY };
     lastImageOffset.value = { ...imageOffset.value };
@@ -302,36 +311,14 @@ const handleMouseUp = () => {
   if (isDragging.value) {
     isDragging.value = false;
     if (canvas.value) {
-      canvas.value.style.cursor = zoomLevel.value > 1 ? 'grab' : 'default';
+      canvas.value.style.cursor = 'grab';
     }
   }
 };
 
 const constrainImageOffset = (offset) => {
-  if (!canvas.value) return offset;
-  const container = canvas.value.parentElement;
-  if (!container) return offset;
-
-  const containerRect = container.getBoundingClientRect();
-  const imageWidth = width.value * zoomLevel.value;
-  const imageHeight = height.value * zoomLevel.value;
-
-  let minX = 0, maxX = 0;
-  if (imageWidth > containerRect.width) {
-    maxX = (imageWidth - containerRect.width) / 2;
-    minX = -maxX;
-  }
-
-  let minY = 0, maxY = 0;
-  if (imageHeight > containerRect.height) {
-    maxY = (imageHeight - containerRect.height) / 2;
-    minY = -maxY;
-  }
-
-  return {
-    x: Math.max(minX, Math.min(maxX, offset.x)),
-    y: Math.max(minY, Math.min(maxY, offset.y))
-  };
+  // This logic might need adjustment depending on desired behavior at edges
+  return offset;
 };
 
 const handleDragMove = (event) => {
@@ -339,37 +326,43 @@ const handleDragMove = (event) => {
 
   const deltaX = event.clientX - dragStart.value.x;
   const deltaY = event.clientY - dragStart.value.y;
+  
+  // No need to divide by zoomLevel here as we are moving the canvas itself
   const newOffset = {
     x: lastImageOffset.value.x + deltaX,
     y: lastImageOffset.value.y + deltaY
   };
+
   imageOffset.value = constrainImageOffset(newOffset);
   updateImagePosition();
   event.preventDefault();
 };
 
-const zoomIn = () => {
-  const newZoom = Math.min(maxZoom, zoomLevel.value * 1.5);
-  if (newZoom !== zoomLevel.value) {
-    zoomLevel.value = newZoom;
-    imageOffset.value = constrainImageOffset(imageOffset.value);
-    drawZoomed();
-  }
-};
+const zoom = (factor) => {
+  const oldZoom = zoomLevel.value;
+  const newZoom = Math.max(minZoom, Math.min(maxZoom, oldZoom * factor));
+  if (newZoom === oldZoom) return;
 
-const zoomOut = () => {
-  const newZoom = Math.max(minZoom, zoomLevel.value / 1.5);
-   if (newZoom !== zoomLevel.value) {
-    zoomLevel.value = newZoom;
-    imageOffset.value = constrainImageOffset(imageOffset.value);
-    drawZoomed();
-  }
-};
+  // Center zoom on the view center for button clicks
+  const centerX = canvas.value.parentElement.clientWidth / 2;
+  const centerY = canvas.value.parentElement.clientHeight / 2;
+  
+  const newOffsetX = imageOffset.value.x - (centerX / oldZoom - centerX / newZoom) * newZoom;
+  const newOffsetY = imageOffset.value.y - (centerY / oldZoom - centerY / newZoom) * newZoom;
+
+  zoomLevel.value = newZoom;
+  imageOffset.value = constrainImageOffset({ x: newOffsetX, y: newOffsetY });
+  updateImagePosition();
+}
+
+const zoomIn = () => zoom(1.5);
+const zoomOut = () => zoom(0.75);
+
 
 const resetZoom = () => {
   zoomLevel.value = 1;
   imageOffset.value = { x: 0, y: 0 };
-  drawZoomed();
+  fitToWindow();
 };
 
 const fitToWindow = () => {
@@ -378,44 +371,44 @@ const fitToWindow = () => {
   if (!container) return;
 
   const containerRect = container.getBoundingClientRect();
-  const scaleX = (containerRect.width - 20) / width.value;
-  const scaleY = (containerRect.height - 20) / height.value;
-  const fitScale = Math.min(scaleX, scaleY);
+  const scaleX = containerRect.width / width.value;
+  const scaleY = containerRect.height / height.value;
+  const fitScale = Math.min(scaleX, scaleY) * 0.95; // 5% padding
 
   minZoom = Math.max(0.05, fitScale * 0.5);
-  zoomLevel.value = Math.max(minZoom, Math.min(maxZoom, fitScale));
-  imageOffset.value = { x: 0, y: 0 };
-  drawZoomed();
+  zoomLevel.value = fitScale;
+  
+  // Center the image
+  const newWidth = width.value * zoomLevel.value;
+  const newHeight = height.value * zoomLevel.value;
+  imageOffset.value = {
+      x: (containerRect.width - newWidth) / 2,
+      y: (containerRect.height - newHeight) / 2
+  };
+
+  updateImagePosition();
 };
 
 const handleWheel = (event) => {
+  const oldZoom = zoomLevel.value;
+  const newZoom = Math.max(minZoom, Math.min(maxZoom, oldZoom * (event.deltaY < 0 ? 1.2 : 0.8)));
+  if (newZoom === oldZoom) return;
+
   const rect = canvas.value.getBoundingClientRect();
   const mouseX = event.clientX - rect.left;
   const mouseY = event.clientY - rect.top;
 
-  const mouseOnImageX = mouseX - imageOffset.value.x;
-  const mouseOnImageY = mouseY - imageOffset.value.y;
-
-  const delta = event.deltaY < 0 ? 1.25 : 0.8;
-  const oldZoom = zoomLevel.value;
-  const newZoom = Math.max(minZoom, Math.min(maxZoom, oldZoom * delta));
-  
-  if (newZoom === oldZoom) return;
+  const newOffsetX = imageOffset.value.x - (mouseX / oldZoom - mouseX / newZoom) * newZoom;
+  const newOffsetY = imageOffset.value.y - (mouseY / oldZoom - mouseY / newZoom) * newZoom;
 
   zoomLevel.value = newZoom;
-
-  const newMouseOnImageX = mouseOnImageX * (newZoom / oldZoom);
-  const newMouseOnImageY = mouseOnImageY * (newZoom / oldZoom);
-  
-  const newOffsetX = imageOffset.value.x + (mouseOnImageX - newMouseOnImageX);
-  const newOffsetY = imageOffset.value.y + (mouseOnImageY - newMouseOnImageY);
-  
   imageOffset.value = constrainImageOffset({ x: newOffsetX, y: newOffsetY });
-  drawZoomed();
+  updateImagePosition();
 };
 
 onMounted(() => {
   ctx = canvas.value.getContext('2d');
+  canvas.value.style.transformOrigin = 'top left';
 
   window.addEventListener('mouseup', handleMouseUp);
   handleGlobalMouseMove = (e) => isDragging.value && handleDragMove(e);
@@ -461,8 +454,7 @@ defineExpose({ displayRawImage });
   flex: 1;
   min-height: 0;
   display: flex;
-  justify-content: center;
-  align-items: center;
+  /* justify-content and align-items are no longer needed as we control position with transform */
   overflow: hidden;
   background-color: var(--vscode-editor-background);
   border: 1px solid var(--vscode-editorWidget-border);
@@ -471,15 +463,15 @@ defineExpose({ displayRawImage });
 }
 
 .raw-image-canvas {
-  max-width: none;
-  max-height: none;
+  /* max-width and max-height are removed */
   image-rendering: pixelated;
   image-rendering: -moz-crisp-edges;
   image-rendering: crisp-edges;
-  border-radius: 2px;
   user-select: none;
   -webkit-user-select: none;
   transition: cursor 0.1s ease;
+  /* Position is controlled by transform now */
+  position: absolute;
 }
 
 .zoom-controls {
