@@ -1,0 +1,151 @@
+name: Release Extension
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Build webview
+      run: npm run build-webview
+    
+    - name: Compile extension
+      run: npm run compile
+    
+    - name: Run tests
+      run: npm test
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Build webview
+      run: npm run build-webview
+    
+    - name: Compile extension
+      run: npm run compile
+    
+    - name: Install vsce
+      run: npm install -g @vscode/vsce
+    
+    - name: Get current version
+      id: current_version
+      run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+    
+    - name: Check if version exists
+      id: check_version
+      run: |
+        if git tag | grep -q "^v${{ steps.current_version.outputs.version }}$"; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Bump version
+      if: steps.check_version.outputs.exists == 'true'
+      run: |
+        npm version patch --no-git-tag-version
+        echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+      id: new_version
+    
+    - name: Set final version
+      id: final_version
+      run: |
+        if [ "${{ steps.check_version.outputs.exists }}" == "true" ]; then
+          echo "version=${{ steps.new_version.outputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "version=${{ steps.current_version.outputs.version }}" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Commit version bump
+      if: steps.check_version.outputs.exists == 'true'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add package.json
+        git commit -m "Bump version to ${{ steps.final_version.outputs.version }}"
+        git push
+    
+    - name: Create Git tag
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git tag -a "v${{ steps.final_version.outputs.version }}" -m "Release v${{ steps.final_version.outputs.version }}"
+        git push origin "v${{ steps.final_version.outputs.version }}"
+    
+    - name: Package extension
+      run: vsce package --out raw-image-viewer-${{ steps.final_version.outputs.version }}.vsix
+    
+    - name: Create GitHub Release
+      uses: actions/create-release@v1
+      id: create_release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ steps.final_version.outputs.version }}
+        release_name: Release v${{ steps.final_version.outputs.version }}
+        draft: false
+        prerelease: false
+        body: |
+          ## 更新内容
+          
+          自动发布版本 v${{ steps.final_version.outputs.version }}
+          
+          ### 主要功能
+          - RAW图像查看和处理
+          - 多种位深度支持 (8/10/12/14/16位)
+          - 智能尺寸计算和常见宽高比匹配
+          - 图像缩放、平移、适应窗口
+          - 响应式控制面板UI
+          
+          ### 技术特性
+          - Vue.js 3 + Composition API
+          - Canvas 2D图像渲染
+          - Pinia状态管理
+          - VS Code扩展集成
+    
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./raw-image-viewer-${{ steps.final_version.outputs.version }}.vsix
+        asset_name: raw-image-viewer-${{ steps.final_version.outputs.version }}.vsix
+        asset_content_type: application/zip
+    
+    - name: Publish to VS Code Marketplace
+      env:
+        VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      run: vsce publish --packagePath raw-image-viewer-${{ steps.final_version.outputs.version }}.vsix

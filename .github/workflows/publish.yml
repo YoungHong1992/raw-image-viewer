@@ -1,0 +1,85 @@
+name: Publish Extension
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Build webview
+      run: npm run build-webview
+    
+    - name: Compile extension
+      run: npm run compile
+    
+    - name: Install vsce
+      run: npm install -g @vscode/vsce
+    
+    - name: Get version from tag
+      id: get_version
+      run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+    
+    - name: Update package.json version
+      run: |
+        npm version ${{ steps.get_version.outputs.version }} --no-git-tag-version --allow-same-version
+    
+    - name: Package extension
+      run: vsce package --out raw-image-viewer-${{ steps.get_version.outputs.version }}.vsix
+    
+    - name: Create GitHub Release
+      uses: actions/create-release@v1
+      id: create_release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+        body: |
+          ## RAW Image Viewer v${{ steps.get_version.outputs.version }}
+          
+          ### 功能特性
+          - 🖼️ RAW图像查看和处理
+          - 🎯 多种位深度支持 (8/10/12/14/16位)
+          - 📐 智能尺寸计算和常见宽高比匹配
+          - 🔍 图像缩放、平移、适应窗口
+          - 🎛️ 响应式控制面板UI
+          - 🎨 支持灰度、RGB、Bayer格式
+          
+          ### 技术架构
+          - Vue.js 3 + Composition API
+          - Canvas 2D图像渲染
+          - Pinia状态管理
+          - VS Code扩展集成
+          - Vite构建工具
+    
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./raw-image-viewer-${{ steps.get_version.outputs.version }}.vsix
+        asset_name: raw-image-viewer-${{ steps.get_version.outputs.version }}.vsix
+        asset_content_type: application/zip
+    
+    - name: Publish to VS Code Marketplace
+      env:
+        VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      run: vsce publish --packagePath raw-image-viewer-${{ steps.get_version.outputs.version }}.vsix
