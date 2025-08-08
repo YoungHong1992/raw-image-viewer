@@ -138,10 +138,10 @@ const displayRawImage = async (data, imgWidth, imgHeight, bpp, format) => {
       ctx.putImageData(imageData, 0, 0);
       ready.value = true;
 
-      // 延迟适应窗口，确保DOM更新完成
+      // 延迟适应窗口，但减少延迟时间避免明显闪烁
       setTimeout(() => {
         fitToWindow();
-      }, 100);
+      }, 10);
 
     } catch (error) {
       console.error('图像处理错误:', error);
