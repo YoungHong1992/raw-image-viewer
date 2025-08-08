@@ -76,8 +76,24 @@ const displayRawImage = async (data, imgWidth, imgHeight, bpp, format) => {
   if (!canvas.value) return;
   ready.value = false;
 
+  // 清理之前的图像数据，防止内存泄漏
+  if (originalImageData) {
+    originalImageData = null;
+  }
+
   setTimeout(() => {
     try {
+      // 参数验证
+      if (!data || imgWidth <= 0 || imgHeight <= 0 || bpp <= 0) {
+        throw new Error('无效的图像参数');
+      }
+
+      // 检查图像尺寸是否过大，防止内存溢出
+      const maxPixels = 50 * 1024 * 1024; // 50M像素限制
+      if (imgWidth * imgHeight > maxPixels) {
+        throw new Error(`图像尺寸过大: ${imgWidth}×${imgHeight} 超过限制`);
+      }
+
       ctx = canvas.value.getContext('2d');
       canvas.value.width = imgWidth;
       canvas.value.height = imgHeight;
@@ -90,6 +106,7 @@ const displayRawImage = async (data, imgWidth, imgHeight, bpp, format) => {
       const bytesPerPixelVal = Math.ceil(bpp / 8);
       const maxValue = Math.pow(2, bpp) - 1;
       let requiredBytes;
+      
       if (format === 'rgb') {
         requiredBytes = imgWidth * imgHeight * bytesPerPixelVal * 3;
       } else {
@@ -97,11 +114,10 @@ const displayRawImage = async (data, imgWidth, imgHeight, bpp, format) => {
       }
 
       if (data.length < requiredBytes) {
-        console.error(`Not enough data. Expected ${requiredBytes} bytes, but got ${data.length} bytes.`);
-        ctx.clearRect(0, 0, canvas.value.width, canvas.value.height);
-        ctx.fillStyle = '#ff0000';
-        ctx.font = '16px Arial';
-        ctx.fillText(`数据不足: 需要 ${requiredBytes} 字节, 实际 ${data.length} 字节`, 10, 30);
+        const errorMsg = `数据不足: 需要 ${requiredBytes} 字节, 实际 ${data.length} 字节`;
+        console.error(errorMsg);
+        
+        // 重置像素值
         pixelR.value = 0;
         pixelG.value = 0;
         pixelB.value = 0;
@@ -109,6 +125,7 @@ const displayRawImage = async (data, imgWidth, imgHeight, bpp, format) => {
         return;
       }
 
+      // 根据格式处理图像
       if (format === 'rgb') {
         processRGBImage(data, pixels, imgWidth, imgHeight, bpp, bytesPerPixelVal, maxValue);
       } else if (format.includes('rggb') || format.includes('grbg') || format.includes('gbrg') || format.includes('bggr')) {
@@ -121,12 +138,13 @@ const displayRawImage = async (data, imgWidth, imgHeight, bpp, format) => {
       ctx.putImageData(imageData, 0, 0);
       ready.value = true;
 
+      // 延迟适应窗口，确保DOM更新完成
       setTimeout(() => {
         fitToWindow();
       }, 100);
 
     } catch (error) {
-      console.error('Error processing image:', error);
+      console.error('图像处理错误:', error);
       ready.value = true;
     }
   }, 10);
@@ -142,16 +160,20 @@ const processGrayscaleImage = (data, pixels, imgWidth, imgHeight, bpp, bytesPerP
         if (bpp <= 8) {
             pixelValue = data[pixelIndex] || 0;
         } else if (bpp <= 16) {
-            const byte1 = data[pixelIndex] || 0;
-            const byte2 = data[pixelIndex + 1] || 0;
-            pixelValue = byte1 | (byte2 << 8);
-            const extraBits = 16 - bpp;
-            if (extraBits > 0) {
-            pixelValue = pixelValue >> extraBits;
+            // 修复：检查数组边界并处理字节序
+            if (pixelIndex + 1 < data.length) {
+                const byte1 = data[pixelIndex] || 0;
+                const byte2 = data[pixelIndex + 1] || 0;
+                // 小端序：低字节在前
+                pixelValue = byte1 | (byte2 << 8);
+                const extraBits = 16 - bpp;
+                if (extraBits > 0) {
+                    pixelValue = pixelValue >> extraBits;
+                }
             }
         }
 
-        const normalizedValue = Math.floor((pixelValue / maxValue) * 255);
+        const normalizedValue = Math.min(255, Math.floor((pixelValue / maxValue) * 255));
         pixels[outputIndex] = normalizedValue;
         pixels[outputIndex + 1] = normalizedValue;
         pixels[outputIndex + 2] = normalizedValue;
@@ -171,18 +193,24 @@ const processRGBImage = (data, pixels, imgWidth, imgHeight, bpp, bytesPerPixelVa
             const channelIndex = pixelIndex + c * bytesPerPixelVal;
 
             if (bpp <= 8) {
-            pixelValue = data[channelIndex] || 0;
+                if (channelIndex < data.length) {
+                    pixelValue = data[channelIndex] || 0;
+                }
             } else if (bpp <= 16) {
-            const byte1 = data[channelIndex] || 0;
-            const byte2 = data[channelIndex + 1] || 0;
-            pixelValue = byte1 | (byte2 << 8);
-            const extraBits = 16 - bpp;
-            if (extraBits > 0) {
-                pixelValue = pixelValue >> extraBits;
-            }
+                // 修复：检查数组边界并处理字节序
+                if (channelIndex + 1 < data.length) {
+                    const byte1 = data[channelIndex] || 0;
+                    const byte2 = data[channelIndex + 1] || 0;
+                    // 小端序：低字节在前
+                    pixelValue = byte1 | (byte2 << 8);
+                    const extraBits = 16 - bpp;
+                    if (extraBits > 0) {
+                        pixelValue = pixelValue >> extraBits;
+                    }
+                }
             }
 
-            const normalizedValue = Math.floor((pixelValue / maxValue) * 255);
+            const normalizedValue = Math.min(255, Math.floor((pixelValue / maxValue) * 255));
             pixels[outputIndex + c] = normalizedValue;
         }
         pixels[outputIndex + 3] = 255;
@@ -194,6 +222,13 @@ const processBayerImage = (data, pixels, imgWidth, imgHeight, bpp, bytesPerPixel
   processGrayscaleImage(data, pixels, imgWidth, imgHeight, bpp, bytesPerPixelVal, maxValue);
   const tempPixels = new Uint8ClampedArray(pixels);
 
+  // 修复：安全的像素访问函数，防止越界
+  const getPixelSafe = (x, y, channel) => {
+    if (x < 0 || x >= imgWidth || y < 0 || y >= imgHeight) return 0;
+    const index = (y * imgWidth + x) * 4 + channel;
+    return tempPixels[index] || 0;
+  };
+
   for (let y = 1; y < imgHeight - 1; y++) {
     for (let x = 1; x < imgWidth - 1; x++) {
       const outputIndex = (y * imgWidth + x) * 4;
@@ -202,42 +237,68 @@ const processBayerImage = (data, pixels, imgWidth, imgHeight, bpp, bytesPerPixel
       const isEvenCol = x % 2 === 0;
 
       if (format === 'rggb') {
-        if (isEvenRow && isEvenCol) { // R
+        if (isEvenRow && isEvenCol) { // R位置
           r = tempPixels[outputIndex];
-          g = (tempPixels[((y - 1) * imgWidth + x) * 4] + tempPixels[((y + 1) * imgWidth + x) * 4] + tempPixels[(y * imgWidth + (x - 1)) * 4] + tempPixels[(y * imgWidth + (x + 1)) * 4]) / 4;
-          b = (tempPixels[((y - 1) * imgWidth + (x - 1)) * 4] + tempPixels[((y - 1) * imgWidth + (x + 1)) * 4] + tempPixels[((y + 1) * imgWidth + (x - 1)) * 4] + tempPixels[((y + 1) * imgWidth + (x + 1)) * 4]) / 4;
-        } else if (isEvenRow && !isEvenCol) { // G
+          g = (getPixelSafe(x, y-1, 0) + getPixelSafe(x, y+1, 0) + getPixelSafe(x-1, y, 0) + getPixelSafe(x+1, y, 0)) / 4;
+          b = (getPixelSafe(x-1, y-1, 0) + getPixelSafe(x+1, y-1, 0) + getPixelSafe(x-1, y+1, 0) + getPixelSafe(x+1, y+1, 0)) / 4;
+        } else if (isEvenRow && !isEvenCol) { // G位置(R行)
           g = tempPixels[outputIndex];
-          r = (tempPixels[(y * imgWidth + (x - 1)) * 4] + tempPixels[(y * imgWidth + (x + 1)) * 4]) / 2;
-          b = (tempPixels[((y - 1) * imgWidth + x) * 4] + tempPixels[((y + 1) * imgWidth + x) * 4]) / 2;
-        } else if (!isEvenRow && isEvenCol) { // G
+          r = (getPixelSafe(x-1, y, 0) + getPixelSafe(x+1, y, 0)) / 2;
+          b = (getPixelSafe(x, y-1, 0) + getPixelSafe(x, y+1, 0)) / 2;
+        } else if (!isEvenRow && isEvenCol) { // G位置(B行)
           g = tempPixels[outputIndex];
-          r = (tempPixels[((y - 1) * imgWidth + x) * 4] + tempPixels[((y + 1) * imgWidth + x) * 4]) / 2;
-          b = (tempPixels[(y * imgWidth + (x - 1)) * 4] + tempPixels[(y * imgWidth + (x + 1)) * 4]) / 2;
-        } else { // B
+          r = (getPixelSafe(x, y-1, 0) + getPixelSafe(x, y+1, 0)) / 2;
+          b = (getPixelSafe(x-1, y, 0) + getPixelSafe(x+1, y, 0)) / 2;
+        } else { // B位置
           b = tempPixels[outputIndex];
-          g = (tempPixels[((y - 1) * imgWidth + x) * 4] + tempPixels[((y + 1) * imgWidth + x) * 4] + tempPixels[(y * imgWidth + (x - 1)) * 4] + tempPixels[(y * imgWidth + (x + 1)) * 4]) / 4;
-          r = (tempPixels[((y - 1) * imgWidth + (x - 1)) * 4] + tempPixels[((y - 1) * imgWidth + (x + 1)) * 4] + tempPixels[((y + 1) * imgWidth + (x - 1)) * 4] + tempPixels[((y + 1) * imgWidth + (x + 1)) * 4]) / 4;
+          g = (getPixelSafe(x, y-1, 0) + getPixelSafe(x, y+1, 0) + getPixelSafe(x-1, y, 0) + getPixelSafe(x+1, y, 0)) / 4;
+          r = (getPixelSafe(x-1, y-1, 0) + getPixelSafe(x+1, y-1, 0) + getPixelSafe(x-1, y+1, 0) + getPixelSafe(x+1, y+1, 0)) / 4;
         }
       }
-      pixels[outputIndex] = Math.min(255, Math.max(0, r));
-      pixels[outputIndex + 1] = Math.min(255, Math.max(0, g));
-      pixels[outputIndex + 2] = Math.min(255, Math.max(0, b));
+      // 添加其他Bayer格式的支持
+      else if (format === 'grbg') {
+        if (isEvenRow && isEvenCol) { // G位置
+          g = tempPixels[outputIndex];
+          r = (getPixelSafe(x+1, y, 0) + getPixelSafe(x-1, y, 0)) / 2;
+          b = (getPixelSafe(x, y-1, 0) + getPixelSafe(x, y+1, 0)) / 2;
+        } else if (isEvenRow && !isEvenCol) { // R位置
+          r = tempPixels[outputIndex];
+          g = (getPixelSafe(x-1, y, 0) + getPixelSafe(x+1, y, 0) + getPixelSafe(x, y-1, 0) + getPixelSafe(x, y+1, 0)) / 4;
+          b = (getPixelSafe(x-1, y-1, 0) + getPixelSafe(x+1, y-1, 0) + getPixelSafe(x-1, y+1, 0) + getPixelSafe(x+1, y+1, 0)) / 4;
+        } else if (!isEvenRow && isEvenCol) { // B位置
+          b = tempPixels[outputIndex];
+          g = (getPixelSafe(x-1, y, 0) + getPixelSafe(x+1, y, 0) + getPixelSafe(x, y-1, 0) + getPixelSafe(x, y+1, 0)) / 4;
+          r = (getPixelSafe(x-1, y-1, 0) + getPixelSafe(x+1, y-1, 0) + getPixelSafe(x-1, y+1, 0) + getPixelSafe(x+1, y+1, 0)) / 4;
+        } else { // G位置
+          g = tempPixels[outputIndex];
+          r = (getPixelSafe(x, y-1, 0) + getPixelSafe(x, y+1, 0)) / 2;
+          b = (getPixelSafe(x-1, y, 0) + getPixelSafe(x+1, y, 0)) / 2;
+        }
+      }
+      
+      pixels[outputIndex] = Math.min(255, Math.max(0, Math.round(r)));
+      pixels[outputIndex + 1] = Math.min(255, Math.max(0, Math.round(g)));
+      pixels[outputIndex + 2] = Math.min(255, Math.max(0, Math.round(b)));
       pixels[outputIndex + 3] = 255;
     }
   }
 
+  // 修复：更安全的边界处理
   for (let y = 0; y < imgHeight; y++) {
     for (let x = 0; x < imgWidth; x++) {
       if (x === 0 || y === 0 || x === imgWidth - 1 || y === imgHeight - 1) {
         const outputIndex = (y * imgWidth + x) * 4;
+        // 找到最近的内部像素进行复制
         const nearX = Math.max(1, Math.min(imgWidth - 2, x));
         const nearY = Math.max(1, Math.min(imgHeight - 2, y));
         const nearIndex = (nearY * imgWidth + nearX) * 4;
         
-        pixels[outputIndex] = pixels[nearIndex];
-        pixels[outputIndex + 1] = pixels[nearIndex + 1];
-        pixels[outputIndex + 2] = pixels[nearIndex + 2];
+        if (nearIndex < pixels.length - 3) {
+          pixels[outputIndex] = pixels[nearIndex];
+          pixels[outputIndex + 1] = pixels[nearIndex + 1];
+          pixels[outputIndex + 2] = pixels[nearIndex + 2];
+          pixels[outputIndex + 3] = 255;
+        }
       }
     }
   }
@@ -398,6 +459,7 @@ const handleWheel = (event) => {
   const mouseX = event.clientX - rect.left;
   const mouseY = event.clientY - rect.top;
 
+  // 恢复原来正确的缩放逻辑：以鼠标位置为缩放中心
   const newOffsetX = imageOffset.value.x - (mouseX / oldZoom - mouseX / newZoom) * newZoom;
   const newOffsetY = imageOffset.value.y - (mouseY / oldZoom - mouseY / newZoom) * newZoom;
 
@@ -434,6 +496,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  // 清理事件监听器
   window.removeEventListener('mouseup', handleMouseUp);
   if (handleGlobalMouseMove) {
     window.removeEventListener('mousemove', handleGlobalMouseMove);
@@ -443,6 +506,17 @@ onUnmounted(() => {
   }
   if (handleGlobalResize) {
     window.removeEventListener('resize', handleGlobalResize);
+  }
+  
+  // 清理图像数据，防止内存泄漏
+  if (originalImageData) {
+    originalImageData = null;
+  }
+  
+  // 清理canvas上下文
+  if (ctx && canvas.value) {
+    ctx.clearRect(0, 0, canvas.value.width, canvas.value.height);
+    ctx = null;
   }
 });
 

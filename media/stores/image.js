@@ -55,15 +55,47 @@ export const useImageStore = defineStore('image', () => {
   }
 
   function validateParams() {
-    if (!fileSize.value || !width.value || !height.value || !bitsPerPixel.value) {
-      error.value = '参数无效';
+    // 基本参数验证
+    if (!fileSize.value || fileSize.value <= 0) {
+      error.value = '文件大小无效';
       return false;
     }
-    const bytesPerPixelVal = Math.ceil(bitsPerPixel.value / 8);
-    const requiredBytes = width.value * height.value * bytesPerPixelVal * (pixelFormat.value === 'rgb' ? 3 : 1);
+    
+    if (!width.value || width.value <= 0 || width.value > 32768) {
+      error.value = '图像宽度无效 (1-32768)';
+      return false;
+    }
+    
+    if (!height.value || height.value <= 0 || height.value > 32768) {
+      error.value = '图像高度无效 (1-32768)';
+      return false;
+    }
+    
+    if (!bitsPerPixel.value || ![8, 10, 12, 14, 16].includes(bitsPerPixel.value)) {
+      error.value = '位深度无效，支持: 8, 10, 12, 14, 16';
+      return false;
+    }
 
+    if (!pixelFormat.value || !['grayscale', 'rgb', 'rggb', 'grbg', 'gbrg', 'bggr'].includes(pixelFormat.value)) {
+      error.value = '像素格式无效';
+      return false;
+    }
+
+    // 计算所需字节数
+    const bytesPerPixelVal = Math.ceil(bitsPerPixel.value / 8);
+    const channelCount = pixelFormat.value === 'rgb' ? 3 : 1;
+    const requiredBytes = width.value * height.value * bytesPerPixelVal * channelCount;
+
+    // 检查文件大小
     if (fileSize.value < requiredBytes) {
-      error.value = `错误: 文件大小与参数不匹配。需要 ${requiredBytes} 字节, 但文件只有 ${fileSize.value} 字节。`;
+      error.value = `文件大小不足: 需要 ${requiredBytes} 字节, 实际 ${fileSize.value} 字节`;
+      return false;
+    }
+
+    // 检查是否超出合理范围（允许一定冗余）
+    const maxAllowedBytes = requiredBytes * 1.5; // 允许50%冗余
+    if (fileSize.value > maxAllowedBytes) {
+      error.value = `文件大小异常: 预期约 ${requiredBytes} 字节, 实际 ${fileSize.value} 字节`;
       return false;
     }
 
