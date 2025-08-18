@@ -11,7 +11,7 @@
 </template>
 
 <script setup>
-import { useImageStore } from '../stores/image';
+import { useImageStore } from '../../stores/image';
 import { storeToRefs } from 'pinia';
 
 const store = useImageStore();

@@ -4,19 +4,18 @@ import { resolve } from 'path';
 
 export default defineConfig({
   plugins: [vue()],
-  root: resolve(__dirname, 'webview'),
-  base: './',
+  root: resolve(__dirname),
   build: {
-    outDir: resolve(__dirname, 'dist/webview'),
+    outDir: resolve(__dirname, '../dist/webview'),
     emptyOutDir: true,
     rollupOptions: {
-      input: resolve(__dirname, 'webview/index.html')
+      input: resolve(__dirname, 'public/index.html')
     }
   },
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'webview/src'),
-      '@shared': resolve(__dirname, 'src/shared')
+      '@': resolve(__dirname, 'src'),
+      '@shared': resolve(__dirname, '../src/shared')
     }
   },
   server: {

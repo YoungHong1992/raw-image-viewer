@@ -11,9 +11,9 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useImageStore } from './stores/image';
-import ControlsPanel from './components/ControlsPanel.vue';
-import ImageContainer from './components/ImageContainer.vue';
-import StatusBar from './components/StatusBar.vue';
+import ControlsPanel from './components/controls/ControlsPanel.vue';
+import ImageContainer from './components/viewer/ImageContainer.vue';
+import StatusBar from './components/status/StatusBar.vue';
 
 const props = defineProps({
   vscode: Object
@@ -26,7 +26,13 @@ const store = useImageStore();
 const applyParams = () => {
   if (store.validateParams()) {
     if (store.rawData && store.rawData.length > 0 && imageContainer.value) {
-      imageContainer.value.displayRawImage(store.rawData, store.width, store.height, store.bitsPerPixel, store.pixelFormat);
+      imageContainer.value.displayRawImage(
+        store.rawData, 
+        store.width, 
+        store.height, 
+        store.bitsPerPixel, 
+        store.pixelFormat
+      );
     }
   }
 };
@@ -40,7 +46,7 @@ onMounted(() => {
           const rawData = new Uint8Array(body.value);
           store.setRawData(rawData);
 
-          // 如果有推荐的设置，自动应用第一个推荐
+          // 自动应用参数
           if (imageContainer.value && store.rawData && store.rawData.length > 0) {
             applyParams();
           }
@@ -49,8 +55,11 @@ onMounted(() => {
       }
       case 'getFileData': {
         const data = store.rawData || new Uint8Array(0);
-        // Send the underlying ArrayBuffer for efficiency
-        props.vscode.postMessage({ type: 'response', requestId: e.data.requestId, body: data.buffer }, [data.buffer]);
+        props.vscode.postMessage({ 
+          type: 'response', 
+          requestId: e.data.requestId, 
+          body: data.buffer 
+        }, [data.buffer]);
         break;
       }
     }
@@ -66,7 +75,6 @@ body {
   margin: 0;
   padding: 0;
   overflow: hidden;
-  /* Prevent scrollbars on the body */
   background-color: var(--vscode-editor-background);
   color: var(--vscode-editor-foreground);
   font-family: var(--vscode-font-family);
@@ -79,7 +87,6 @@ body {
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
-  /* 防止整体滚动 */
 }
 
 .raw-image-container {
@@ -87,10 +94,8 @@ body {
   flex-direction: row;
   flex: 1;
   min-height: 0;
-  /* 重要：允许flex子项收缩 */
   padding: 10px;
   padding-bottom: 0;
-  /* 为状态栏留出空间 */
   box-sizing: border-box;
   gap: 15px;
 }

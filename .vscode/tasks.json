@@ -1,55 +1,50 @@
 {
-	"version": "2.0.0",
-	"tasks": [
-		{
-			"type": "npm",
-			"script": "compile",
-			"group": "build",
-			"presentation": {
-				"echo": true,
-				"reveal": "silent",
-				"focus": false,
-				"panel": "shared",
-				"showReuseMessage": true,
-				"clear": false
-			},
-			"isBackground": false,
-			"problemMatcher": ["$tsc"]
-		},
-		{
-			"label": "build-all",
-			"dependsOrder": "sequence",
-			"dependsOn": [
-				"npm: compile",
-				"npm: build-webview"
-			],
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			},
-			"presentation": {
-				"echo": true,
-				"reveal": "always",
-				"focus": false,
-				"panel": "shared",
-				"showReuseMessage": true,
-				"clear": true
-			},
-			"problemMatcher": []
-		},
-		{
-			"type": "npm",
-			"script": "build-webview",
-			"group": "build",
-			"presentation": {
-				"echo": true,
-				"reveal": "silent",
-				"focus": false,
-				"panel": "shared",
-				"showReuseMessage": true,
-				"clear": false
-			},
-			"problemMatcher": []
-		}
-	]
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "npm",
+            "script": "build-install",
+            "group": "build",
+            "presentation": {
+                "panel": "shared",
+                "reveal": "silent"
+            }
+        },
+        {
+            "type": "npm",
+            "script": "build-webview",
+            "group": "build",
+            "presentation": {
+                "panel": "shared",
+                "reveal": "silent"
+            }
+        },
+        {
+            "type": "npm",
+            "script": "compile",
+            "group": "build",
+            "presentation": {
+                "panel": "shared",
+                "reveal": "silent"
+            },
+            "problemMatcher": "$tsc"
+        },
+        {
+            "label": "build-all",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "npm: build-install",
+                "npm: build-webview",
+                "npm: compile"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "panel": "shared",
+                "reveal": "always"
+            }
+        }
+    ]
 }

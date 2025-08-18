@@ -2,7 +2,7 @@
   "name": "raw-image-viewer",
   "displayName": "RawImageViewer",
   "description": "Advanced RAW image viewer with smart resolution recommendations and multiple pixel format support",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "publisher": "YoungHong1992",
   "engines": {
     "vscode": "^1.91.0"
@@ -14,7 +14,7 @@
     "Other"
   ],
   "activationEvents": [],
-  "main": "./out/extension.js",
+  "main": "./out/extension/extension.js",
   "contributes": {
     "commands": [
       {
@@ -35,24 +35,27 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run build-extension && npm run build-webview",
-    "compile": "tsc -p ./",
-    "watch-extension": "tsc -watch -p ./",
-    "pretest": "npm run compile && npm run lint",
-    "lint": "eslint src --ext ts",
-    "test": "vscode-test",
-    "dev-webview": "vite --config vite.config.js",
-    "build-webview": "vite build --config vite.config.js",
+    "vscode:prepublish": "npm run build",
+    "compile": "tsc -p config/tsconfig.json",
+    "watch": "tsc -watch -p config/tsconfig.json",
+    "lint": "eslint src --ext ts --config config/.eslintrc.json",
+    "test": "npm run compile && npm run lint && node ./out/test/runTest.js",
+    "dev": "npm run dev-webview",
+    "dev-webview": "npm --prefix webview run dev",
+    "build-install": "npm install",
+    "build": "npm run build-extension && npm run build-webview",
     "build-extension": "npm run compile",
-    "build-release": "npx vsce package",
-    "release:patch": "node scripts/release.js patch",
-    "release:minor": "node scripts/release.js minor",
-    "release:major": "node scripts/release.js major"
+    "build-webview": "npm --prefix webview run build",
+    "package": "npm run build && npx vsce package",
+    "release:patch": "node tools/release.js patch",
+    "release:minor": "node tools/release.js minor",
+    "release:major": "node tools/release.js major"
   },
   "devDependencies": {
-    "@types/mocha": "^10.0.7",
-    "@types/node": "20.x",
-    "@types/vscode": "^1.91.0",
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^20.19.11",
+    "@types/vscode": "^1.103.0",
     "@typescript-eslint/eslint-plugin": "^7.14.1",
     "@typescript-eslint/parser": "^7.11.0",
     "@vitejs/plugin-vue": "^5.0.5",

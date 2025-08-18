@@ -18,7 +18,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
-import { useImageStore } from '../stores/image';
+import { useImageStore } from '../../stores/image';
 import { storeToRefs } from 'pinia';
 
 const store = useImageStore();

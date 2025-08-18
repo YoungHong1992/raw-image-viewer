@@ -1,0 +1,5 @@
+sensor_gain: 1.46875
+exp_time: 20.0 ms
+awb_r: 2098
+awb_g: 1024
+awb_b: 1625
