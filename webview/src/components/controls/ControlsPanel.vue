@@ -316,8 +316,8 @@ const findExactResolutions = (totalPixels) => {
               return currDiff < prevDiff ? curr : prev;
             });
             
-            // 只有在差异在5%以内时才包含此分辨率
-            if (Math.abs(ratio - closest.value) < 0.05) {
+            // 只有在差异在1%以内时才包含此分辨率
+            if (Math.abs(ratio - closest.value) < 0.01) {
               pairs.push({
                 width,
                 height,
