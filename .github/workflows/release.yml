@@ -28,7 +28,7 @@ jobs:
       run: npm run compile
     
     - name: Run tests
-      run: npm test
+      run: npm run test
 
   release:
     needs: test
@@ -74,10 +74,10 @@ jobs:
     
     - name: Bump version
       if: steps.check_version.outputs.exists == 'true'
+      id: new_version
       run: |
         npm version patch --no-git-tag-version
         echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
-      id: new_version
     
     - name: Set final version
       id: final_version
@@ -108,13 +108,12 @@ jobs:
       run: vsce package --out raw-image-viewer-${{ steps.final_version.outputs.version }}.vsix
     
     - name: Create GitHub Release
-      uses: actions/create-release@v1
-      id: create_release
+      uses: softprops/action-gh-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: v${{ steps.final_version.outputs.version }}
-        release_name: Release v${{ steps.final_version.outputs.version }}
+        name: Release v${{ steps.final_version.outputs.version }}
         draft: false
         prerelease: false
         body: |
@@ -134,16 +133,7 @@ jobs:
           - Canvas 2D图像渲染
           - Pinia状态管理
           - VS Code扩展集成
-    
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./raw-image-viewer-${{ steps.final_version.outputs.version }}.vsix
-        asset_name: raw-image-viewer-${{ steps.final_version.outputs.version }}.vsix
-        asset_content_type: application/zip
+        files: ./raw-image-viewer-${{ steps.final_version.outputs.version }}.vsix
     
     - name: Publish to VS Code Marketplace
       env:

@@ -21,11 +21,11 @@ jobs:
     - name: Install dependencies
       run: npm ci
     
-    - name: Build webview
-      run: npm run build-webview
-    
     - name: Compile extension
       run: npm run compile
+    
+    - name: Build webview
+      run: npm run build-webview
     
     - name: Install vsce
       run: npm install -g @vscode/vsce
@@ -42,13 +42,12 @@ jobs:
       run: vsce package --out raw-image-viewer-${{ steps.get_version.outputs.version }}.vsix
     
     - name: Create GitHub Release
-      uses: actions/create-release@v1
-      id: create_release
+      uses: softprops/action-gh-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
+        name: Release ${{ github.ref }}
         draft: false
         prerelease: false
         body: |
@@ -68,16 +67,7 @@ jobs:
           - Pinia状态管理
           - VS Code扩展集成
           - Vite构建工具
-    
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./raw-image-viewer-${{ steps.get_version.outputs.version }}.vsix
-        asset_name: raw-image-viewer-${{ steps.get_version.outputs.version }}.vsix
-        asset_content_type: application/zip
+        files: ./raw-image-viewer-${{ steps.get_version.outputs.version }}.vsix
     
     - name: Publish to VS Code Marketplace
       env:
