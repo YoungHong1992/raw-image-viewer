@@ -136,11 +136,11 @@ const validSizes = computed(() => {
   const sizes = [];
   const fileBits = fileSize.value * 8;
   const currentBits = bitsPerPixel.value;
+  const totalPixels = fileBits / currentBits;
   
   // 对每个宽高比计算可能的尺寸
   for (const ar of aspectRatios) {
     // 计算基础尺寸
-    const totalPixels = fileBits / currentBits;
     const baseSize = Math.sqrt(totalPixels / (ar.w * ar.h));
     
     // 尝试不同的整数倍数
@@ -158,6 +158,20 @@ const validSizes = computed(() => {
       }
     }
   }
+  
+  // 添加精确匹配的分辨率（处理非标准宽高比）
+  const exactMatches = findExactResolutions(totalPixels);
+  exactMatches.forEach(match => {
+    // 检查是否已经存在于标准宽高比中
+    const exists = sizes.some(size => size.width === match.width && size.height === match.height);
+    if (!exists) {
+      sizes.push({
+        width: match.width,
+        height: match.height,
+        ratio: match.ratio
+      });
+    }
+  });
   
   // 去重并排序
   const uniqueSizes = sizes.filter((size, index, self) => 
@@ -204,7 +218,15 @@ const selectSize = (size) => {
 // 选择位深度
 const selectBitsPerPixel = (bits) => {
   bitsPerPixel.value = bits;
+  // 自动选择该位深度下的推荐分辨率
+  findRecommendedResolutionForBits(bits);
   updateStoreValues();
+  // 如果参数有效，自动应用
+  if (canApply.value) {
+    setTimeout(() => {
+      emit('applyParams');
+    }, 100);
+  }
 };
 
 // 交换宽高
@@ -256,42 +278,132 @@ const applySettings = () => {
   }
 };
 
+// 查找精确匹配的分辨率（处理非标准宽高比）
+const findExactResolutions = (totalPixels) => {
+  const matches = [];
+  
+  // 获取所有可能的因数对
+  const getFactorPairs = (n) => {
+    const pairs = [];
+    const sqrt = Math.sqrt(n);
+    
+    for (let i = Math.max(100, Math.floor(sqrt / 10)); i <= Math.min(sqrt * 10, 8000); i++) {
+      if (n % i === 0) {
+        const width = i;
+        const height = n / i;
+        
+        // 只选择合理的分辨率范围
+        if (height >= 100 && height <= 8000) {
+          // 添加约束：宽高都必须为8的整倍数
+          if (width % 8 === 0 && height % 8 === 0) {
+            const ratio = width / height;
+            
+            // 检查是否接近某个标准宽高比
+            const standardRatios = [
+              { name: '16:9', value: 16/9 },
+              { name: '16:10', value: 16/10 },
+              { name: '3:2', value: 3/2 },
+              { name: '4:3', value: 4/3 },
+              { name: '1:1', value: 1 },
+              { name: '5:4', value: 5/4 },
+              { name: '2:1', value: 2/1 },
+              { name: '21:9', value: 21/9 }
+            ];
+            
+            const closest = standardRatios.reduce((prev, curr) => {
+              const prevDiff = Math.abs(ratio - prev.value);
+              const currDiff = Math.abs(ratio - curr.value);
+              return currDiff < prevDiff ? curr : prev;
+            });
+            
+            // 只有在差异在5%以内时才包含此分辨率
+            if (Math.abs(ratio - closest.value) < 0.05) {
+              pairs.push({
+                width,
+                height,
+                ratio: closest.name
+              });
+            }
+          }
+        }
+      }
+    }
+    
+    return pairs;
+  };
+  
+  return getFactorPairs(totalPixels);
+};
+
+// 为指定位深度查找推荐分辨率
+const findRecommendedResolutionForBits = (bits) => {
+  if (fileSize.value === 0) return;
+  
+  const fileBits = fileSize.value * 8;
+  const totalPixels = fileBits / bits;
+  
+  // 优先尝试标准宽高比
+  const sortedAspectRatios = [...aspectRatios].sort((a, b) => {
+    // 优先级：16:9 > 16:10 > 3:2 > 4:3 > 1:1 > 5:4 > 2:1 > 21:9
+    const priority = { '16:9': 8, '16:10': 7, '3:2': 6, '4:3': 5, '1:1': 4, '5:4': 3, '2:1': 2, '21:9': 1 };
+    return (priority[b.ratio] || 0) - (priority[a.ratio] || 0);
+  });
+  
+  // 对每个宽高比计算可能的尺寸
+  for (const ar of sortedAspectRatios) {
+    const baseSize = Math.sqrt(totalPixels / (ar.w * ar.h));
+    
+    // 尝试不同的整数倍数
+    for (let multiplier = 1; multiplier <= 100; multiplier++) {
+      const width = Math.round(baseSize * ar.w * multiplier);
+      const height = Math.round(baseSize * ar.h * multiplier);
+      
+      // 验证是否精确匹配
+      if (width * height * bits === fileBits && width > 0 && height > 0) {
+        // 找到合法参数，更新本地状态
+        localWidth.value = width;
+        localHeight.value = height;
+        isManualInput.value = false;
+        return;
+      }
+    }
+  }
+  
+  // 如果标准宽高比没有找到，尝试精确匹配（处理非标准宽高比）
+  const exactMatches = findExactResolutions(totalPixels);
+  if (exactMatches.length > 0) {
+    // 选择第一个精确匹配（通常是最大的合理分辨率）
+    const match = exactMatches[0];
+    localWidth.value = match.width;
+    localHeight.value = match.height;
+    isManualInput.value = false;
+    return;
+  }
+};
+
 // 按位深度从大到小查找合法参数并加载
 const findAndLoadValidParams = () => {
   if (fileSize.value === 0) return;
   
-  const fileBits = fileSize.value * 8;
   const bitsToTry = [16, 14, 12, 10, 8];
   
-  // 按宽高比从大到小排序
-  const sortedAspectRatios = [...aspectRatios].sort((a, b) => (b.w / b.h) - (a.w / a.h));
-  
   for (const bits of bitsToTry) {
-    // 对每个宽高比计算可能的尺寸（按宽高比从大到小）
-    for (const ar of sortedAspectRatios) {
-      const totalPixels = fileBits / bits;
-      const baseSize = Math.sqrt(totalPixels / (ar.w * ar.h));
-      
-      // 尝试不同的整数倍数
-      for (let multiplier = 1; multiplier <= 100; multiplier++) {
-        const width = Math.round(baseSize * ar.w * multiplier);
-        const height = Math.round(baseSize * ar.h * multiplier);
-        
-        // 验证是否精确匹配
-        if (width * height * bits === fileBits) {
-          // 找到合法参数，直接加载
-          bitsPerPixel.value = bits;
-          localWidth.value = width;
-          localHeight.value = height;
-          isManualInput.value = false;
-          updateStoreValues();
-          // 自动应用
-          setTimeout(() => {
-            emit('applyParams');
-          }, 100);
-          return;
-        }
-      }
+    // 使用推荐分辨率查找逻辑
+    const originalWidth = localWidth.value;
+    const originalHeight = localHeight.value;
+    
+    findRecommendedResolutionForBits(bits);
+    
+    // 检查是否找到了有效的分辨率
+    if (localWidth.value !== originalWidth || localHeight.value !== originalHeight) {
+      // 找到合法参数，直接加载
+      bitsPerPixel.value = bits;
+      updateStoreValues();
+      // 自动应用
+      setTimeout(() => {
+        emit('applyParams');
+      }, 100);
+      return;
     }
   }
   
