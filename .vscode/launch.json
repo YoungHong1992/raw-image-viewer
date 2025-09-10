@@ -2,7 +2,7 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
-			"name": "Build & Run Extension",
+			"name": "Run Extension",
 			"type": "extensionHost",
 			"request": "launch",
 			"runtimeExecutable": "${execPath}",
@@ -12,7 +12,48 @@
 			"outFiles": [
 				"${workspaceFolder}/out/**/*.js"
 			],
-			"preLaunchTask": "build-all"
+			"preLaunchTask": "npm: build"
+		},
+		{
+			"name": "Debug Extension",
+			"type": "extensionHost",
+			"request": "launch",
+			"runtimeExecutable": "${execPath}",
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}"
+			],
+			"outFiles": [
+				"${workspaceFolder}/out/**/*.js"
+			],
+			"preLaunchTask": "npm: compile",
+			"resolveSourceMapLocations": [
+				"${workspaceFolder}/out/**/*.js.map",
+				"${workspaceFolder}/src/**/*.ts"
+			]
+		},
+		{
+			"name": "Run Tests",
+			"type": "extensionHost",
+			"request": "launch",
+			"runtimeExecutable": "${execPath}",
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}",
+				"--extensionTestsPath=${workspaceFolder}/out/test"
+			],
+			"outFiles": [
+				"${workspaceFolder}/out/**/*.js"
+			],
+			"preLaunchTask": "npm: test"
+		},
+		{
+			"name": "Debug WebView",
+			"type": "chrome",
+			"request": "attach",
+			"port": 9222,
+			"webRoot": "${workspaceFolder}/webview",
+			"url": "http://localhost:3000",
+			"timeout": 30000,
+			"preLaunchTask": "npm: dev"
 		}
 	]
 }
