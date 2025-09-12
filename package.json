@@ -1,8 +1,8 @@
 {
   "name": "raw-image-viewer",
   "displayName": "RawImageViewer",
-  "description": "Advanced RAW image viewer with smart resolution recommendations and multiple pixel format support",
-  "version": "0.0.4",
+  "description": "Professional RAW image viewer for VS Code with support for various pixel formats and intelligent image processing",
+  "version": "0.0.5",
   "publisher": "YoungHong1992",
   "engines": {
     "vscode": "^1.91.0"

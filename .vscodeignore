@@ -50,6 +50,10 @@ BUILD_VERIFICATION.md
 REFACTOR_PLAN.md
 REFACTOR_SUMMARY.md
 
+# 示例文件
+examples/**
+docs/**
+
 # Git相关
 .git/**
 .github/**
