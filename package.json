@@ -2,7 +2,7 @@
   "name": "raw-image-viewer",
   "displayName": "RawImageViewer",
   "description": "Professional RAW image viewer for VS Code with support for various pixel formats and intelligent image processing",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "publisher": "YoungHong1992",
   "engines": {
     "vscode": "^1.91.0"
@@ -20,6 +20,10 @@
       {
         "command": "raw-image-viewer.helloWorld",
         "title": "Hello World"
+      },
+      {
+        "command": "raw-image-viewer.openWithRawViewer",
+        "title": "Open with Raw Image Viewer"
       }
     ],
     "customEditors": [
@@ -29,10 +33,39 @@
         "selector": [
           {
             "filenamePattern": "*.raw"
+          },
+          {
+            "filenamePattern": "*.bin"
           }
         ]
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Raw Image Viewer",
+      "properties": {
+        "raw-image-viewer.enableBinSupport": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable support for .bin files as raw image files"
+        }
+      }
+    },
+    "menus": {
+      "editor/title": [
+        {
+          "command": "raw-image-viewer.openWithRawViewer",
+          "when": "resourceLangId == plaintext && resourceFilename =~ /\\.bin$/ && config.raw-image-viewer.enableBinSupport == true",
+          "group": "navigation"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "raw-image-viewer.openWithRawViewer",
+          "when": "resourceFilename =~ /\\.bin$/ && config.raw-image-viewer.enableBinSupport == true",
+          "group": "navigation"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run build",
