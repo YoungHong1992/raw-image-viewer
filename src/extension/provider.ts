@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { RawImageDocument } from './document';
-import { VIEW_TYPE } from '../shared/constants';
-import { WebviewMessage, InitMessage, ResponseMessage } from '../shared/types';
+import { VIEW_TYPE, CONFIG_KEYS } from '../shared/constants';
+import { WebviewMessage, InitMessage, ResponseMessage, ExtensionConfig } from '../shared/types';
 
 /**
  * RAW图像查看器提供者
@@ -22,6 +22,30 @@ export class RawImageViewerProvider implements vscode.CustomReadonlyEditorProvid
     );
   }
 
+  private getConfig(): ExtensionConfig {
+    const config = vscode.workspace.getConfiguration();
+    return {
+      enableBinSupport: config.get(CONFIG_KEYS.ENABLE_BIN_SUPPORT, true)
+    };
+  }
+
+  private shouldHandleFile(uri: vscode.Uri): boolean {
+    const config = this.getConfig();
+    const filePath = uri.fsPath.toLowerCase();
+
+    // Always handle .raw files
+    if (filePath.endsWith('.raw')) {
+      return true;
+    }
+
+    // Only handle .bin files if enabled in config
+    if (filePath.endsWith('.bin')) {
+      return config.enableBinSupport;
+    }
+
+    return false;
+  }
+
   private readonly webviewPanelMap = new Map<string, vscode.WebviewPanel>();
   private readonly _callbacks = new Map<number, (response: any) => void>();
 
@@ -30,6 +54,11 @@ export class RawImageViewerProvider implements vscode.CustomReadonlyEditorProvid
     openContext: { backupId?: string },
     _token: vscode.CancellationToken
   ): Promise<RawImageDocument> {
+    // Check if we should handle this file based on configuration
+    if (!this.shouldHandleFile(uri)) {
+      throw new Error(`Raw Image Viewer does not support ${uri.fsPath}. You can enable .bin support in VS Code settings.`);
+    }
+
     const document = await RawImageDocument.create(uri);
     return document;
   }

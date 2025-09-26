@@ -43,3 +43,10 @@ export interface Resolution {
   width: number;
   height: number;
 }
+
+/**
+ * 扩展配置设置
+ */
+export interface ExtensionConfig {
+  enableBinSupport: boolean;
+}

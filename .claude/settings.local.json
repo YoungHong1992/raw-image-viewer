@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run build:*)",
+      "Bash(npm run package:*)",
+      "Bash(powershell:*)",
+      "Bash(git checkout:*)",
+      "mcp__rube__RUBE_SEARCH_TOOLS",
+      "mcp__rube__RUBE_MANAGE_CONNECTIONS",
+      "mcp__rube__RUBE_MULTI_EXECUTE_TOOL",
+      "Bash(npm run compile)",
+      "Bash(npm run lint)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npm run release:patch:*)",
+      "Bash(unzip:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
