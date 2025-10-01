@@ -9,9 +9,18 @@ export default defineConfig({
   build: {
     outDir: resolve(__dirname, 'dist/webview'),
     emptyOutDir: true,
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true
+      }
+    },
     rollupOptions: {
       input: resolve(__dirname, 'webview/index.html')
-    }
+    },
+    // 生成 source map 会增加体积，生产环境不需要
+    sourcemap: false
   },
   resolve: {
     alias: {

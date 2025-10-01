@@ -1,19 +1,17 @@
-# 只保留扩展运行必需的文件
-# 白名单策略：忽略所有文件，只明确包含必要的文件
+# VS Code 扩展发布包 - 最小化白名单
+# 只包含扩展运行必需的文件
 
 # 忽略所有文件
 **
 
-# 包含必要的文件和目录
+# === 核心运行文件 ===
 !package.json
 !README.md
 !LICENSE
+
+# === 编译后的代码（必需） ===
 !out/extension/**
 !out/shared/**
-!dist/webview/**
 
-# 确保忽略源代码（因为已经编译到out目录）
-!src/
-src/**
-!webview/
-webview/**
+# === 构建后的webview（必需） ===
+!dist/webview/**
