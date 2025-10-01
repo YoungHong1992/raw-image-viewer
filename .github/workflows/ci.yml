@@ -26,6 +26,9 @@ jobs:
     - name: Install dependencies
       run: npm ci
     
+    - name: Install xvfb for headless testing
+      run: sudo apt-get update && sudo apt-get install -y xvfb
+    
     - name: Type check
       run: npm run typecheck
     
@@ -39,7 +42,7 @@ jobs:
       run: npm run compile
     
     - name: Run tests
-      run: npm run test
+      run: xvfb-run -a npm run test
     
     - name: Package extension (dry run)
       run: npm run package
