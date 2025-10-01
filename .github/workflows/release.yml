@@ -22,7 +22,7 @@ jobs:
       run: npm ci
     
     - name: Build webview
-      run: npm run build-webview
+      run: npm run build:webview
     
     - name: Compile extension
       run: npm run compile
@@ -51,7 +51,7 @@ jobs:
       run: npm ci
     
     - name: Build webview
-      run: npm run build-webview
+      run: npm run build:webview
     
     - name: Compile extension
       run: npm run compile

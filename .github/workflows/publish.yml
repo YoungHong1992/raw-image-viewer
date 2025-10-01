@@ -25,7 +25,7 @@ jobs:
       run: npm run compile
     
     - name: Build webview
-      run: npm run build-webview
+      run: npm run build:webview
     
     - name: Install vsce
       run: npm install -g @vscode/vsce
