@@ -1,18 +1,22 @@
 import * as vscode from 'vscode';
 import { RawImageDocument } from './document';
-import { VIEW_TYPE, CONFIG_KEYS } from '../shared/constants';
-import { WebviewMessage, InitMessage, ResponseMessage, ExtensionConfig } from '../shared/types';
+import { CONFIG_KEYS, VIEW_TYPE_BIN } from '../shared/constants';
+import { WebviewMessage, InitMessage, ResponseMessage } from '../shared/types';
 
 /**
  * RAW图像查看器提供者
  */
 export class RawImageViewerProvider implements vscode.CustomReadonlyEditorProvider<RawImageDocument> {
-  constructor(private readonly _context: vscode.ExtensionContext) {}
+  private readonly _viewType: string;
 
-  public static register(context: vscode.ExtensionContext): vscode.Disposable {
+  constructor(private readonly _context: vscode.ExtensionContext, viewType: string) {
+    this._viewType = viewType;
+  }
+
+  public static register(context: vscode.ExtensionContext, viewType: string): vscode.Disposable {
     return vscode.window.registerCustomEditorProvider(
-      VIEW_TYPE,
-      new RawImageViewerProvider(context),
+      viewType,
+      new RawImageViewerProvider(context, viewType),
       {
         webviewOptions: {
           retainContextWhenHidden: true,
@@ -20,30 +24,6 @@ export class RawImageViewerProvider implements vscode.CustomReadonlyEditorProvid
         supportsMultipleEditorsPerDocument: false,
       }
     );
-  }
-
-  private getConfig(): ExtensionConfig {
-    const config = vscode.workspace.getConfiguration();
-    return {
-      enableBinSupport: config.get(CONFIG_KEYS.ENABLE_BIN_SUPPORT, true)
-    };
-  }
-
-  private shouldHandleFile(uri: vscode.Uri): boolean {
-    const config = this.getConfig();
-    const filePath = uri.fsPath.toLowerCase();
-
-    // Always handle .raw files
-    if (filePath.endsWith('.raw')) {
-      return true;
-    }
-
-    // Only handle .bin files if enabled in config
-    if (filePath.endsWith('.bin')) {
-      return config.enableBinSupport;
-    }
-
-    return false;
   }
 
   private readonly webviewPanelMap = new Map<string, vscode.WebviewPanel>();
@@ -54,11 +34,16 @@ export class RawImageViewerProvider implements vscode.CustomReadonlyEditorProvid
     openContext: { backupId?: string },
     _token: vscode.CancellationToken
   ): Promise<RawImageDocument> {
-    // Check if we should handle this file based on configuration
-    if (!this.shouldHandleFile(uri)) {
-      throw new Error(`Raw Image Viewer does not support ${uri.fsPath}. You can enable .bin support in VS Code settings.`);
+    // Check if bin support is disabled for .bin files
+    if (this._viewType === VIEW_TYPE_BIN) {
+      const config = vscode.workspace.getConfiguration();
+      const enableBinSupport = config.get(CONFIG_KEYS.ENABLE_BIN_SUPPORT, true);
+      if (!enableBinSupport) {
+        // Throw an error to make VS Code fall back to the next available editor
+        throw new Error('Bin file support is disabled');
+      }
     }
-
+    
     const document = await RawImageDocument.create(uri);
     return document;
   }

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { RawImageViewerProvider } from './provider';
-import { CONFIG_KEYS } from '../shared/constants';
+import { CONFIG_KEYS, VIEW_TYPE_RAW, VIEW_TYPE_BIN } from '../shared/constants';
 
 /**
  * 扩展激活函数
@@ -8,10 +8,12 @@ import { CONFIG_KEYS } from '../shared/constants';
 export function activate(context: vscode.ExtensionContext) {
   console.log('Raw Image Viewer extension is now active!');
 
-  // 注册Hello World命令（保持向后兼容）
-  const helloWorldCommand = vscode.commands.registerCommand('raw-image-viewer.helloWorld', () => {
-    vscode.window.showInformationMessage('Hello World from RawImageViewer!');
-  });
+  // Always register the provider for .raw files
+  context.subscriptions.push(RawImageViewerProvider.register(context, VIEW_TYPE_RAW));
+
+  // Always register the provider for .bin files
+  // The provider will check the config internally and reject if disabled
+  context.subscriptions.push(RawImageViewerProvider.register(context, VIEW_TYPE_BIN));
 
   // 注册"使用Raw Image Viewer打开"命令
   const openWithRawViewerCommand = vscode.commands.registerCommand('raw-image-viewer.openWithRawViewer', async (uri: vscode.Uri) => {
@@ -23,28 +25,37 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     if (uri) {
-      await vscode.commands.executeCommand('vscode.openWith', uri, 'raw-image-viewer.rawImage');
+      const viewType = uri.fsPath.toLowerCase().endsWith('.bin') ? VIEW_TYPE_BIN : VIEW_TYPE_RAW;
+      await vscode.commands.executeCommand('vscode.openWith', uri, viewType);
     } else {
       vscode.window.showErrorMessage('No file selected to open with Raw Image Viewer');
     }
   });
 
-  // 注册自定义编辑器提供者
-  const editorProvider = RawImageViewerProvider.register(context);
-
-  // 监听配置变化
-  const configChangeListener = vscode.workspace.onDidChangeConfiguration(e => {
+  // 监听配置变化, 提示用户重载
+  const configChangeListener = vscode.workspace.onDidChangeConfiguration(async e => {
     if (e.affectsConfiguration(CONFIG_KEYS.ENABLE_BIN_SUPPORT)) {
-      console.log('Raw Image Viewer: bin support configuration changed');
+      const result = await vscode.window.showInformationMessage(
+        'Raw Image Viewer: Configuration for .bin file support has changed. Please reload the window for the change to take effect.',
+        'Reload Window'
+      );
+      if (result === 'Reload Window') {
+        vscode.commands.executeCommand('workbench.action.reloadWindow');
+      }
     }
   });
 
-  context.subscriptions.push(helloWorldCommand, openWithRawViewerCommand, editorProvider, configChangeListener);
+  // 注册Hello World命令（保持向后兼容）
+  const helloWorldCommand = vscode.commands.registerCommand('raw-image-viewer.helloWorld', () => {
+    vscode.window.showInformationMessage('Hello World from RawImageViewer!');
+  });
+
+  context.subscriptions.push(helloWorldCommand, openWithRawViewerCommand, configChangeListener);
 }
 
 /**
  * 扩展停用函数
  */
 export function deactivate() {
-  // 清理资源
+  // All disposables are now managed by context.subscriptions
 }

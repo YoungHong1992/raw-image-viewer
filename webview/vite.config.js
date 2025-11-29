@@ -4,10 +4,10 @@ import { resolve } from 'path';
 
 export default defineConfig({
   plugins: [vue()],
-  root: resolve(__dirname, 'webview'),
+  root: resolve(__dirname),
   base: './',
   build: {
-    outDir: resolve(__dirname, 'dist/webview'),
+    outDir: resolve(__dirname, '../dist/webview'),
     emptyOutDir: true,
     minify: 'terser',
     terserOptions: {
@@ -23,7 +23,7 @@ export default defineConfig({
       }
     },
     rollupOptions: {
-      input: resolve(__dirname, 'webview/index.html')
+      input: resolve(__dirname, 'index.html')
     },
     // 生成 source map 会增加体积，生产环境不需要
     sourcemap: false,
@@ -32,8 +32,8 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'webview/src'),
-      '@shared': resolve(__dirname, 'src/shared')
+      '@': resolve(__dirname, 'src'),
+      '@shared': resolve(__dirname, '../src/shared')
     }
   },
   server: {

@@ -2,7 +2,8 @@
  * 扩展常量定义
  */
 export const EXTENSION_ID = 'raw-image-viewer';
-export const VIEW_TYPE = 'raw-image-viewer.rawImage';
+export const VIEW_TYPE_RAW = 'raw-image-viewer.rawImage';
+export const VIEW_TYPE_BIN = 'raw-image-viewer.binImage';
 
 /**
  * 配置键名
