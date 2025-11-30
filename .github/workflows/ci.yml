@@ -73,6 +73,12 @@ jobs:
     - name: Build extension
       run: npm run build
     
+    - name: Install vsce
+      run: npm install -g @vscode/vsce
+    
+    - name: Package extension
+      run: vsce package
+    
     - name: Check package size
       run: |
         if ls raw-image-viewer-*.vsix 1> /dev/null 2>&1; then
