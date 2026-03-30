@@ -1,7 +1,14 @@
 <template>
   <div class="image-container">
-    <canvas ref="canvas" class="raw-image-canvas" @mousemove="handleMouseMove" @mouseout="handleMouseOut"
-      @mousedown="handleMouseDown" @mouseup="handleMouseUp" @wheel.prevent="handleWheel"></canvas>
+    <canvas
+      ref="canvas"
+      class="raw-image-canvas"
+      @mousemove="handleMouseMove"
+      @mouseout="handleMouseOut"
+      @mousedown="handleMouseDown"
+      @mouseup="handleMouseUp"
+      @wheel.prevent="handleWheel"
+    ></canvas>
     <div v-if="!ready && store.rawData" class="loading-overlay">
       <div class="loading-spinner"></div>
       <div>{{ t('viewer.processing') }}</div>
@@ -17,16 +24,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
-import { useImageStore } from '../../stores/image';
+import { onMounted, onUnmounted, ref } from 'vue';
 import { storeToRefs } from 'pinia';
+import { useImageStore } from '../../stores/image';
+import { renderRawImage } from '../../../../src/shared/imageProcessing';
 
 const store = useImageStore();
 const {
   width,
   height,
-  bitsPerPixel,
-  pixelFormat,
   rawData,
   ready,
   cursorX,
@@ -52,46 +58,28 @@ const dragStart = ref({ x: 0, y: 0 });
 const imageOffset = ref({ x: 0, y: 0 });
 const lastImageOffset = ref({ x: 0, y: 0 });
 
-let originalImageData = null;
-
+let renderedPixels = null;
 let handleGlobalMouseMove = null;
 let handleGlobalKeyDown = null;
 let handleGlobalResize = null;
 
-
-const drawCheckerboard = (ctx, w, h, cellSize = 16) => {
-  ctx.save();
-  const lightColor = '#ffffff';
-  const darkColor = '#cccccc';
-
-  for (let y = 0; y < h; y += cellSize) {
-    for (let x = 0; x < w; x += cellSize) {
-      const isLight = ((Math.floor(x / cellSize) + Math.floor(y / cellSize)) % 2 === 0);
-      ctx.fillStyle = isLight ? lightColor : darkColor;
-      ctx.fillRect(x, y, cellSize, cellSize);
-    }
-  }
-  ctx.restore();
+const updateImagePosition = () => {
+  if (!canvas.value) return;
+  canvas.value.style.transform = `translate(${imageOffset.value.x}px, ${imageOffset.value.y}px) scale(${zoomLevel.value})`;
 };
 
-const displayRawImage = async (data, imgWidth, imgHeight, bpp, format) => {
+const displayRawImage = async (data, imgWidth, imgHeight, bitsPerPixel, pixelFormat, storageMode) => {
   if (!canvas.value) return;
   ready.value = false;
-
-  // 清理之前的图像数据，防止内存泄漏
-  if (originalImageData) {
-    originalImageData = null;
-  }
+  renderedPixels = null;
 
   setTimeout(() => {
     try {
-      // 参数验证
-      if (!data || imgWidth <= 0 || imgHeight <= 0 || bpp <= 0) {
+      if (!data || imgWidth <= 0 || imgHeight <= 0 || bitsPerPixel <= 0) {
         throw new Error(t('viewer.errors.invalidImageParams'));
       }
 
-      // 检查图像尺寸是否过大，防止内存溢出
-      const maxPixels = 50 * 1024 * 1024; // 50M像素限制
+      const maxPixels = 50 * 1024 * 1024;
       if (imgWidth * imgHeight > maxPixels) {
         throw new Error(t('viewer.errors.imageTooLarge', { width: imgWidth, height: imgHeight }));
       }
@@ -102,239 +90,40 @@ const displayRawImage = async (data, imgWidth, imgHeight, bpp, format) => {
       canvasWidth.value = imgWidth;
       canvasHeight.value = imgHeight;
 
-      drawCheckerboard(ctx, imgWidth, imgHeight);
       const imageData = ctx.createImageData(imgWidth, imgHeight);
-      const pixels = imageData.data;
-      const bytesPerPixelVal = Math.ceil(bpp / 8);
-      const maxValue = Math.pow(2, bpp) - 1;
-      let requiredBytes;
-      
-      if (format === 'rgb') {
-        requiredBytes = imgWidth * imgHeight * bytesPerPixelVal * 3;
-      } else {
-        requiredBytes = imgWidth * imgHeight * bytesPerPixelVal;
-      }
+      renderedPixels = renderRawImage(data, {
+        width: imgWidth,
+        height: imgHeight,
+        bitsPerPixel,
+        pixelFormat,
+        storageMode
+      });
 
-      if (data.length < requiredBytes) {
-        const errorMsg = t('viewer.errors.dataTooSmall', { required: requiredBytes, actual: data.length });
-        console.error(errorMsg);
-        
-        // 重置像素值
-        pixelR.value = 0;
-        pixelG.value = 0;
-        pixelB.value = 0;
-        ready.value = true;
-        return;
-      }
-
-      // 根据格式处理图像
-      if (format === 'rgb') {
-        processRGBImage(data, pixels, imgWidth, imgHeight, bpp, bytesPerPixelVal, maxValue);
-      } else if (format.includes('rggb') || format.includes('grbg') || format.includes('gbrg') || format.includes('bggr')) {
-        processBayerImage(data, pixels, imgWidth, imgHeight, bpp, bytesPerPixelVal, maxValue, format);
-      } else {
-        processGrayscaleImage(data, pixels, imgWidth, imgHeight, bpp, bytesPerPixelVal, maxValue);
-      }
-
-      originalImageData = imageData;
+      imageData.data.set(renderedPixels);
       ctx.putImageData(imageData, 0, 0);
       ready.value = true;
 
-      // 延迟适应窗口，但减少延迟时间避免明显闪烁
       setTimeout(() => {
         fitToWindow();
       }, 10);
-
     } catch (error) {
       console.error(t('viewer.errors.processingError'), error);
+      pixelR.value = 0;
+      pixelG.value = 0;
+      pixelB.value = 0;
       ready.value = true;
     }
   }, 10);
 };
 
-const processGrayscaleImage = (data, pixels, imgWidth, imgHeight, bpp, bytesPerPixelVal, maxValue) => {
-    for (let y = 0; y < imgHeight; y++) {
-        for (let x = 0; x < imgWidth; x++) {
-        const pixelIndex = (y * imgWidth + x) * bytesPerPixelVal;
-        const outputIndex = (y * imgWidth + x) * 4;
-
-        let pixelValue = 0;
-        if (bpp <= 8) {
-            pixelValue = data[pixelIndex] || 0;
-        } else if (bpp <= 16) {
-            // 修复：检查数组边界并处理字节序
-            if (pixelIndex + 1 < data.length) {
-                const byte1 = data[pixelIndex] || 0;
-                const byte2 = data[pixelIndex + 1] || 0;
-                // 小端序：低字节在前
-                pixelValue = byte1 | (byte2 << 8);
-                const extraBits = 16 - bpp;
-                if (extraBits > 0) {
-                    pixelValue = pixelValue >> extraBits;
-                }
-            }
-        }
-
-        const normalizedValue = Math.min(255, Math.floor((pixelValue / maxValue) * 255));
-        pixels[outputIndex] = normalizedValue;
-        pixels[outputIndex + 1] = normalizedValue;
-        pixels[outputIndex + 2] = normalizedValue;
-        pixels[outputIndex + 3] = 255;
-        }
-    }
-};
-
-const processRGBImage = (data, pixels, imgWidth, imgHeight, bpp, bytesPerPixelVal, maxValue) => {
-    for (let y = 0; y < imgHeight; y++) {
-        for (let x = 0; x < imgWidth; x++) {
-        const pixelIndex = (y * imgWidth + x) * bytesPerPixelVal * 3;
-        const outputIndex = (y * imgWidth + x) * 4;
-
-        for (let c = 0; c < 3; c++) {
-            let pixelValue = 0;
-            const channelIndex = pixelIndex + c * bytesPerPixelVal;
-
-            if (bpp <= 8) {
-                if (channelIndex < data.length) {
-                    pixelValue = data[channelIndex] || 0;
-                }
-            } else if (bpp <= 16) {
-                // 修复：检查数组边界并处理字节序
-                if (channelIndex + 1 < data.length) {
-                    const byte1 = data[channelIndex] || 0;
-                    const byte2 = data[channelIndex + 1] || 0;
-                    // 小端序：低字节在前
-                    pixelValue = byte1 | (byte2 << 8);
-                    const extraBits = 16 - bpp;
-                    if (extraBits > 0) {
-                        pixelValue = pixelValue >> extraBits;
-                    }
-                }
-            }
-
-            const normalizedValue = Math.min(255, Math.floor((pixelValue / maxValue) * 255));
-            pixels[outputIndex + c] = normalizedValue;
-        }
-        pixels[outputIndex + 3] = 255;
-        }
-    }
-};
-
-const processBayerImage = (data, pixels, imgWidth, imgHeight, bpp, bytesPerPixelVal, maxValue, format) => {
-  processGrayscaleImage(data, pixels, imgWidth, imgHeight, bpp, bytesPerPixelVal, maxValue);
-  const tempPixels = new Uint8ClampedArray(pixels);
-
-  // 修复：安全的像素访问函数，防止越界
-  const getPixelSafe = (x, y, channel) => {
-    if (x < 0 || x >= imgWidth || y < 0 || y >= imgHeight) return 0;
-    const index = (y * imgWidth + x) * 4 + channel;
-    return tempPixels[index] || 0;
-  };
-
-  for (let y = 1; y < imgHeight - 1; y++) {
-    for (let x = 1; x < imgWidth - 1; x++) {
-      const outputIndex = (y * imgWidth + x) * 4;
-      let r = 0, g = 0, b = 0;
-      const isEvenRow = y % 2 === 0;
-      const isEvenCol = x % 2 === 0;
-
-      if (format === 'rggb') {
-        if (isEvenRow && isEvenCol) { // R位置
-          r = tempPixels[outputIndex];
-          g = (getPixelSafe(x, y-1, 0) + getPixelSafe(x, y+1, 0) + getPixelSafe(x-1, y, 0) + getPixelSafe(x+1, y, 0)) / 4;
-          b = (getPixelSafe(x-1, y-1, 0) + getPixelSafe(x+1, y-1, 0) + getPixelSafe(x-1, y+1, 0) + getPixelSafe(x+1, y+1, 0)) / 4;
-        } else if (isEvenRow && !isEvenCol) { // G位置(R行)
-          g = tempPixels[outputIndex];
-          r = (getPixelSafe(x-1, y, 0) + getPixelSafe(x+1, y, 0)) / 2;
-          b = (getPixelSafe(x, y-1, 0) + getPixelSafe(x, y+1, 0)) / 2;
-        } else if (!isEvenRow && isEvenCol) { // G位置(B行)
-          g = tempPixels[outputIndex];
-          r = (getPixelSafe(x, y-1, 0) + getPixelSafe(x, y+1, 0)) / 2;
-          b = (getPixelSafe(x-1, y, 0) + getPixelSafe(x+1, y, 0)) / 2;
-        } else { // B位置
-          b = tempPixels[outputIndex];
-          g = (getPixelSafe(x, y-1, 0) + getPixelSafe(x, y+1, 0) + getPixelSafe(x-1, y, 0) + getPixelSafe(x+1, y, 0)) / 4;
-          r = (getPixelSafe(x-1, y-1, 0) + getPixelSafe(x+1, y-1, 0) + getPixelSafe(x-1, y+1, 0) + getPixelSafe(x+1, y+1, 0)) / 4;
-        }
-      }
-      // 添加其他Bayer格式的支持
-      else if (format === 'grbg') {
-        if (isEvenRow && isEvenCol) { // G位置
-          g = tempPixels[outputIndex];
-          r = (getPixelSafe(x+1, y, 0) + getPixelSafe(x-1, y, 0)) / 2;
-          b = (getPixelSafe(x, y-1, 0) + getPixelSafe(x, y+1, 0)) / 2;
-        } else if (isEvenRow && !isEvenCol) { // R位置
-          r = tempPixels[outputIndex];
-          g = (getPixelSafe(x-1, y, 0) + getPixelSafe(x+1, y, 0) + getPixelSafe(x, y-1, 0) + getPixelSafe(x, y+1, 0)) / 4;
-          b = (getPixelSafe(x-1, y-1, 0) + getPixelSafe(x+1, y-1, 0) + getPixelSafe(x-1, y+1, 0) + getPixelSafe(x+1, y+1, 0)) / 4;
-        } else if (!isEvenRow && isEvenCol) { // B位置
-          b = tempPixels[outputIndex];
-          g = (getPixelSafe(x-1, y, 0) + getPixelSafe(x+1, y, 0) + getPixelSafe(x, y-1, 0) + getPixelSafe(x, y+1, 0)) / 4;
-          r = (getPixelSafe(x-1, y-1, 0) + getPixelSafe(x+1, y-1, 0) + getPixelSafe(x-1, y+1, 0) + getPixelSafe(x+1, y+1, 0)) / 4;
-        } else { // G位置
-          g = tempPixels[outputIndex];
-          r = (getPixelSafe(x, y-1, 0) + getPixelSafe(x, y+1, 0)) / 2;
-          b = (getPixelSafe(x-1, y, 0) + getPixelSafe(x+1, y, 0)) / 2;
-        }
-      }
-      
-      pixels[outputIndex] = Math.min(255, Math.max(0, Math.round(r)));
-      pixels[outputIndex + 1] = Math.min(255, Math.max(0, Math.round(g)));
-      pixels[outputIndex + 2] = Math.min(255, Math.max(0, Math.round(b)));
-      pixels[outputIndex + 3] = 255;
-    }
-  }
-
-  // 修复：更安全的边界处理
-  for (let y = 0; y < imgHeight; y++) {
-    for (let x = 0; x < imgWidth; x++) {
-      if (x === 0 || y === 0 || x === imgWidth - 1 || y === imgHeight - 1) {
-        const outputIndex = (y * imgWidth + x) * 4;
-        // 找到最近的内部像素进行复制
-        const nearX = Math.max(1, Math.min(imgWidth - 2, x));
-        const nearY = Math.max(1, Math.min(imgHeight - 2, y));
-        const nearIndex = (nearY * imgWidth + nearX) * 4;
-        
-        if (nearIndex < pixels.length - 3) {
-          pixels[outputIndex] = pixels[nearIndex];
-          pixels[outputIndex + 1] = pixels[nearIndex + 1];
-          pixels[outputIndex + 2] = pixels[nearIndex + 2];
-          pixels[outputIndex + 3] = 255;
-        }
-      }
-    }
-  }
-};
-
-const updateImagePosition = () => {
-  if (!canvas.value) return;
-  // Use transform for panning
-  const canvasEl = canvas.value;
-  canvasEl.style.transform = `translate(${imageOffset.value.x}px, ${imageOffset.value.y}px) scale(${zoomLevel.value})`;
-};
-
-const drawZoomed = () => {
-  if (!canvas.value || !ctx) return;
-  const canvasEl = canvas.value;
-  
-  // We now control scale via transform, so canvas width/height is static
-  canvasEl.style.width = width.value + 'px';
-  canvasEl.style.height = height.value + 'px';
-  
-  canvasEl.style.imageRendering = 'pixelated';
-  canvasEl.style.cursor = zoomLevel.value > 1 ? 'grab' : 'default';
-  updateImagePosition();
-};
-
-
 const handleMouseMove = (event) => {
   if (!canvas.value || !ready.value) return;
+
   if (isDragging.value) {
     handleDragMove(event);
     return;
   }
-  
-  // Correctly calculate mouse position on the original image
+
   const rect = canvas.value.getBoundingClientRect();
   const x = Math.floor((event.clientX - rect.left) / zoomLevel.value);
   const y = Math.floor((event.clientY - rect.top) / zoomLevel.value);
@@ -342,11 +131,11 @@ const handleMouseMove = (event) => {
   cursorX.value = x;
   cursorY.value = y;
 
-  if (x >= 0 && x < width.value && y >= 0 && y < height.value && originalImageData) {
+  if (x >= 0 && x < width.value && y >= 0 && y < height.value && renderedPixels) {
     const pixelIndex = (y * width.value + x) * 4;
-    pixelR.value = originalImageData.data[pixelIndex];
-    pixelG.value = originalImageData.data[pixelIndex + 1];
-    pixelB.value = originalImageData.data[pixelIndex + 2];
+    pixelR.value = renderedPixels[pixelIndex];
+    pixelG.value = renderedPixels[pixelIndex + 1];
+    pixelB.value = renderedPixels[pixelIndex + 2];
   }
 };
 
@@ -359,29 +148,30 @@ const handleMouseOut = () => {
 };
 
 const handleMouseDown = (event) => {
-  if (event.button === 0) { // Pan with left click
-    isDragging.value = true;
-    dragStart.value = { x: event.clientX, y: event.clientY };
-    lastImageOffset.value = { ...imageOffset.value };
-    if (canvas.value) {
-      canvas.value.style.cursor = 'grabbing';
-    }
-    event.preventDefault();
+  if (event.button !== 0) {
+    return;
   }
+
+  isDragging.value = true;
+  dragStart.value = { x: event.clientX, y: event.clientY };
+  lastImageOffset.value = { ...imageOffset.value };
+
+  if (canvas.value) {
+    canvas.value.style.cursor = 'grabbing';
+  }
+
+  event.preventDefault();
 };
 
 const handleMouseUp = () => {
-  if (isDragging.value) {
-    isDragging.value = false;
-    if (canvas.value) {
-      canvas.value.style.cursor = 'grab';
-    }
+  if (!isDragging.value) {
+    return;
   }
-};
 
-const constrainImageOffset = (offset) => {
-  // This logic might need adjustment depending on desired behavior at edges
-  return offset;
+  isDragging.value = false;
+  if (canvas.value) {
+    canvas.value.style.cursor = 'grab';
+  }
 };
 
 const handleDragMove = (event) => {
@@ -389,14 +179,11 @@ const handleDragMove = (event) => {
 
   const deltaX = event.clientX - dragStart.value.x;
   const deltaY = event.clientY - dragStart.value.y;
-  
-  // No need to divide by zoomLevel here as we are moving the canvas itself
-  const newOffset = {
+
+  imageOffset.value = {
     x: lastImageOffset.value.x + deltaX,
     y: lastImageOffset.value.y + deltaY
   };
-
-  imageOffset.value = constrainImageOffset(newOffset);
   updateImagePosition();
   event.preventDefault();
 };
@@ -404,23 +191,22 @@ const handleDragMove = (event) => {
 const zoom = (factor) => {
   const oldZoom = zoomLevel.value;
   const newZoom = Math.max(minZoom, Math.min(maxZoom, oldZoom * factor));
-  if (newZoom === oldZoom) return;
+  if (newZoom === oldZoom || !canvas.value) return;
 
-  // Center zoom on the view center for button clicks
-  const centerX = canvas.value.parentElement.clientWidth / 2;
-  const centerY = canvas.value.parentElement.clientHeight / 2;
-  
-  const newOffsetX = imageOffset.value.x - (centerX / oldZoom - centerX / newZoom) * newZoom;
-  const newOffsetY = imageOffset.value.y - (centerY / oldZoom - centerY / newZoom) * newZoom;
+  const container = canvas.value.parentElement;
+  const centerX = container.clientWidth / 2;
+  const centerY = container.clientHeight / 2;
 
+  imageOffset.value = {
+    x: imageOffset.value.x - (centerX / oldZoom - centerX / newZoom) * newZoom,
+    y: imageOffset.value.y - (centerY / oldZoom - centerY / newZoom) * newZoom
+  };
   zoomLevel.value = newZoom;
-  imageOffset.value = constrainImageOffset({ x: newOffsetX, y: newOffsetY });
   updateImagePosition();
-}
+};
 
 const zoomIn = () => zoom(1.5);
 const zoomOut = () => zoom(0.75);
-
 
 const resetZoom = () => {
   zoomLevel.value = 1;
@@ -436,23 +222,20 @@ const fitToWindow = () => {
   const containerRect = container.getBoundingClientRect();
   const scaleX = containerRect.width / width.value;
   const scaleY = containerRect.height / height.value;
-  const fitScale = Math.min(scaleX, scaleY) * 0.95; // 5% padding
+  const fitScale = Math.min(scaleX, scaleY) * 0.95;
 
   minZoom = Math.max(0.05, fitScale * 0.5);
   zoomLevel.value = fitScale;
-  
-  // Center the image
-  const newWidth = width.value * zoomLevel.value;
-  const newHeight = height.value * zoomLevel.value;
   imageOffset.value = {
-      x: (containerRect.width - newWidth) / 2,
-      y: (containerRect.height - newHeight) / 2
+    x: (containerRect.width - width.value * zoomLevel.value) / 2,
+    y: (containerRect.height - height.value * zoomLevel.value) / 2
   };
-
   updateImagePosition();
 };
 
 const handleWheel = (event) => {
+  if (!canvas.value) return;
+
   const oldZoom = zoomLevel.value;
   const newZoom = Math.max(minZoom, Math.min(maxZoom, oldZoom * (event.deltaY < 0 ? 1.2 : 0.8)));
   if (newZoom === oldZoom) return;
@@ -461,12 +244,11 @@ const handleWheel = (event) => {
   const mouseX = event.clientX - rect.left;
   const mouseY = event.clientY - rect.top;
 
-  // 恢复原来正确的缩放逻辑：以鼠标位置为缩放中心
-  const newOffsetX = imageOffset.value.x - (mouseX / oldZoom - mouseX / newZoom) * newZoom;
-  const newOffsetY = imageOffset.value.y - (mouseY / oldZoom - mouseY / newZoom) * newZoom;
-
+  imageOffset.value = {
+    x: imageOffset.value.x - (mouseX / oldZoom - mouseX / newZoom) * newZoom,
+    y: imageOffset.value.y - (mouseY / oldZoom - mouseY / newZoom) * newZoom
+  };
   zoomLevel.value = newZoom;
-  imageOffset.value = constrainImageOffset({ x: newOffsetX, y: newOffsetY });
   updateImagePosition();
 };
 
@@ -475,16 +257,28 @@ onMounted(() => {
   canvas.value.style.transformOrigin = 'top left';
 
   window.addEventListener('mouseup', handleMouseUp);
-  handleGlobalMouseMove = (e) => isDragging.value && handleDragMove(e);
+  handleGlobalMouseMove = event => isDragging.value && handleDragMove(event);
   window.addEventListener('mousemove', handleGlobalMouseMove);
 
-  handleGlobalKeyDown = (e) => {
-    if (e.ctrlKey || e.metaKey) {
-      switch (e.key) {
-        case '=': case '+': e.preventDefault(); zoomIn(); break;
-        case '-': e.preventDefault(); zoomOut(); break;
-        case '0': e.preventDefault(); resetZoom(); break;
-      }
+  handleGlobalKeyDown = (event) => {
+    if (!event.ctrlKey && !event.metaKey) {
+      return;
+    }
+
+    switch (event.key) {
+      case '=':
+      case '+':
+        event.preventDefault();
+        zoomIn();
+        break;
+      case '-':
+        event.preventDefault();
+        zoomOut();
+        break;
+      case '0':
+        event.preventDefault();
+        resetZoom();
+        break;
     }
   };
   window.addEventListener('keydown', handleGlobalKeyDown);
@@ -498,7 +292,6 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  // 清理事件监听器
   window.removeEventListener('mouseup', handleMouseUp);
   if (handleGlobalMouseMove) {
     window.removeEventListener('mousemove', handleGlobalMouseMove);
@@ -509,13 +302,9 @@ onUnmounted(() => {
   if (handleGlobalResize) {
     window.removeEventListener('resize', handleGlobalResize);
   }
-  
-  // 清理图像数据，防止内存泄漏
-  if (originalImageData) {
-    originalImageData = null;
-  }
-  
-  // 清理canvas上下文
+
+  renderedPixels = null;
+
   if (ctx && canvas.value) {
     ctx.clearRect(0, 0, canvas.value.width, canvas.value.height);
     ctx = null;
@@ -530,7 +319,6 @@ defineExpose({ displayRawImage });
   flex: 1;
   min-height: 0;
   display: flex;
-  /* justify-content and align-items are no longer needed as we control position with transform */
   overflow: hidden;
   background-color: var(--vscode-editor-background);
   border: 1px solid var(--vscode-editorWidget-border);
@@ -539,14 +327,12 @@ defineExpose({ displayRawImage });
 }
 
 .raw-image-canvas {
-  /* max-width and max-height are removed */
   image-rendering: pixelated;
   image-rendering: -moz-crisp-edges;
   image-rendering: crisp-edges;
   user-select: none;
   -webkit-user-select: none;
   transition: cursor 0.1s ease;
-  /* Position is controlled by transform now */
   position: absolute;
 }
 

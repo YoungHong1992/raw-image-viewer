@@ -85,8 +85,10 @@
     "// --- 代码质量与测试 (Quality & Test) ---": "",
     "lint": "eslint src --ext ts --config config/.eslintrc.json",
     "typecheck": "tsc --noEmit -p config/tsconfig.json",
-    "test": "run-s compile lint test:run",
+    "test": "run-s compile lint test:unit",
+    "test:unit": "node ./out/test/runUnitTests.js",
     "test:run": "node ./out/test/runTest.js",
+    "test:integration": "node ./out/test/runTest.js",
 
     "// --- 构建与打包 (Build & Package) ---": "",
     "clean": "rimraf out dist",

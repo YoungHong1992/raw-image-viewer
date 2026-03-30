@@ -31,7 +31,8 @@ const applyParams = () => {
         store.width, 
         store.height, 
         store.bitsPerPixel, 
-        store.pixelFormat
+        store.pixelFormat,
+        store.storageMode
       );
     }
   }
@@ -44,6 +45,7 @@ onMounted(() => {
       case 'init': {
         if (body.value) {
           store.setLocale(body.locale || 'en');
+          store.setFileName(body.fileName || '');
           const rawData = new Uint8Array(body.value);
           store.setRawData(rawData);
 

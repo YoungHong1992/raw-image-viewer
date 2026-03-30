@@ -14,6 +14,8 @@ export interface InitMessage extends WebviewMessage {
     editable: boolean;
     /** VS Code UI language (e.g. "en", "en-us", "zh-cn") */
     locale?: string;
+    /** File basename for heuristics and UI defaults */
+    fileName?: string;
   };
 }
 
@@ -30,11 +32,16 @@ export interface ResponseMessage extends WebviewMessage {
 /**
  * 图像参数类型
  */
+export type PixelFormat = 'grayscale' | 'rgb' | 'rggb' | 'grbg';
+
+export type StorageMode = 'packed' | 'word16';
+
 export interface ImageParams {
   width: number;
   height: number;
   bitsPerPixel: number;
-  pixelFormat: 'grayscale' | 'rgb' | 'rggb' | 'grbg' | 'gbrg' | 'bggr';
+  pixelFormat: PixelFormat;
+  storageMode: StorageMode;
 }
 
 /**
@@ -44,6 +51,11 @@ export interface Resolution {
   name: string;
   width: number;
   height: number;
+}
+
+export interface ResolutionCandidate extends Resolution {
+  ratio: string;
+  source: 'preset' | 'factor';
 }
 
 /**

@@ -107,7 +107,8 @@ export class RawImageViewerProvider implements vscode.CustomReadonlyEditorProvid
         this.postMessage(panel, 'init', {
           value: document.documentData,
           editable: false,
-          locale: vscode.env.language
+          locale: vscode.env.language,
+          fileName: document.uri.fsPath.split(/[\\/]/).pop() ?? document.uri.path.split('/').pop() ?? ''
         });
         return;
         

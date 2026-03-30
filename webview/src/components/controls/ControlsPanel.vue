@@ -1,6 +1,5 @@
 <template>
   <div class="controls-panel">
-    <!-- 文件信息 -->
     <div class="section">
       <h3>{{ t('controls.fileInfo') }}</h3>
       <div class="form-group">
@@ -9,37 +8,34 @@
       </div>
     </div>
 
-    <!-- 分辨率设置 -->
     <div class="section">
       <h3>{{ t('controls.resolution') }}</h3>
-      
-      <!-- 常见尺寸 -->
+
       <div class="form-group">
         <label>{{ t('controls.commonSizes') }}</label>
         <div class="size-buttons">
-          <button 
-            v-for="size in validSizes" 
+          <button
+            v-for="size in validSizes"
             :key="`${size.width}x${size.height}`"
             @click="selectSize(size)"
             class="size-btn"
-            :class="{ 'active': localWidth === size.width && localHeight === size.height }"
+            :class="{ active: localWidth === size.width && localHeight === size.height }"
           >
             {{ size.width }}×{{ size.height }}<br>
-            <small>({{ size.ratio }})</small>
+            <small>({{ size.name ? `${size.name}, ${size.ratio}` : size.ratio }})</small>
           </button>
         </div>
       </div>
 
-      <!-- 手动输入 -->
       <div class="form-group">
         <label>{{ t('controls.width') }}</label>
         <div class="input-group">
-          <input 
-            type="number" 
-            v-model.number="localWidth" 
+          <input
+            type="number"
+            v-model.number="localWidth"
             @input="onWidthChange"
             min="1"
-            :class="{ 'invalid': !canApply }"
+            :class="{ invalid: !canApply }"
           />
           <button @click="swapDimensions" class="swap-button" :title="t('controls.swapDimensions')">⇄</button>
         </div>
@@ -48,54 +44,64 @@
       <div class="form-group">
         <label>{{ t('controls.height') }}</label>
         <div class="input-group">
-          <input 
-            type="number" 
-            v-model.number="localHeight" 
+          <input
+            type="number"
+            v-model.number="localHeight"
             @input="onHeightChange"
             min="1"
-            :class="{ 'invalid': !canApply }"
+            :class="{ invalid: !canApply }"
           />
         </div>
       </div>
     </div>
 
-    <!-- 位深度设置 -->
     <div class="section">
       <h3>{{ t('controls.bitDepth') }}</h3>
       <div class="bits-grid">
-        <button 
-          v-for="bits in availableBits" 
+        <button
+          v-for="bits in availableBits"
           :key="bits"
           @click="selectBitsPerPixel(bits)"
           class="bits-btn"
-          :class="{ 'active': bitsPerPixel === bits }"
+          :class="{ active: bitsPerPixel === bits }"
         >
           {{ bits }}
         </button>
       </div>
     </div>
 
-    <!-- 像素格式 -->
+    <div class="section">
+      <h3>{{ t('controls.storageMode') }}</h3>
+      <div class="storage-grid">
+        <button
+          v-for="mode in availableStorageModes"
+          :key="mode"
+          @click="selectStorageMode(mode)"
+          class="storage-btn"
+          :class="{ active: storageMode === mode }"
+        >
+          {{ t(`storageMode.${mode}`) }}
+        </button>
+      </div>
+    </div>
+
     <div class="section">
       <h3>{{ t('controls.pixelFormat') }}</h3>
       <div class="form-group">
-        <select v-model="pixelFormat" @change="updateStoreValues">
+        <select v-model="pixelFormat" @change="handlePixelFormatChange">
           <option value="grayscale">{{ t('pixelFormat.grayscale') }}</option>
           <option value="rgb">{{ t('pixelFormat.rgb') }}</option>
           <option value="rggb">{{ t('pixelFormat.rggb') }}</option>
           <option value="grbg">{{ t('pixelFormat.grbg') }}</option>
-          <option value="gbrg">{{ t('pixelFormat.gbrg') }}</option>
-          <option value="bggr">{{ t('pixelFormat.bggr') }}</option>
         </select>
       </div>
     </div>
 
-    <!-- 应用按钮 -->
-    <button 
-      @click="applySettings" 
-      :disabled="!canApply" 
+    <button
+      @click="applySettings"
+      :disabled="!canApply"
       class="apply-button"
-      :class="{ 'disabled': !canApply }"
+      :class="{ disabled: !canApply }"
     >
       {{ t('controls.apply') }}
     </button>
@@ -103,99 +109,54 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
-import { useImageStore } from '../../stores/image';
+import { computed, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
+import { useImageStore } from '../../stores/image';
+import { calculateTotalPixels, findMatchingResolutions, findRecommendedResolution, matchesFileSize } from '../../../../src/shared/utils';
 
 const store = useImageStore();
-const { width, height, bitsPerPixel, pixelFormat, fileSize, availableBits } = storeToRefs(store);
+const {
+  fileName,
+  fileSize,
+  width,
+  height,
+  bitsPerPixel,
+  storageMode,
+  pixelFormat,
+  availableBits,
+  availableStorageModes
+} = storeToRefs(store);
 
 const t = (key, params) => store.t(key, params);
-
 const emit = defineEmits(['applyParams']);
 
-// 本地状态
 const localWidth = ref(width.value);
 const localHeight = ref(height.value);
 const isManualInput = ref(false);
 
-// 定义宽高比
-const aspectRatios = [
-  { ratio: '1:1', w: 1, h: 1 },
-  { ratio: '5:4', w: 5, h: 4 },
-  { ratio: '4:3', w: 4, h: 3 },
-  { ratio: '3:2', w: 3, h: 2 },
-  { ratio: '16:10', w: 16, h: 10 },
-  { ratio: '16:9', w: 16, h: 9 },
-  { ratio: '2:1', w: 2, h: 1 },
-  { ratio: '21:9', w: 21, h: 9 }
-];
-
-// 计算有效尺寸
 const validSizes = computed(() => {
-  if (fileSize.value === 0) return [];
-  
-  const sizes = [];
-  const fileBits = fileSize.value * 8;
-  const currentBits = bitsPerPixel.value;
-  const totalPixels = fileBits / currentBits;
-  
-  // 对每个宽高比计算可能的尺寸
-  for (const ar of aspectRatios) {
-    // 计算基础尺寸
-    const baseSize = Math.sqrt(totalPixels / (ar.w * ar.h));
-    
-    // 尝试不同的整数倍数
-    for (let multiplier = 1; multiplier <= 100; multiplier++) {
-      const width = Math.round(baseSize * ar.w * multiplier);
-      const height = Math.round(baseSize * ar.h * multiplier);
-      
-      // 验证是否精确匹配
-      if (width * height * currentBits === fileBits) {
-        sizes.push({
-          width,
-          height,
-          ratio: ar.ratio
-        });
-      }
-    }
-  }
-  
-  // 添加精确匹配的分辨率（处理非标准宽高比）
-  const exactMatches = findExactResolutions(totalPixels);
-  exactMatches.forEach(match => {
-    // 检查是否已经存在于标准宽高比中
-    const exists = sizes.some(size => size.width === match.width && size.height === match.height);
-    if (!exists) {
-      sizes.push({
-        width: match.width,
-        height: match.height,
-        ratio: match.ratio
-      });
-    }
-  });
-  
-  // 去重并排序
-  const uniqueSizes = sizes.filter((size, index, self) => 
-    index === self.findIndex(s => s.width === size.width && s.height === size.height)
+  return findMatchingResolutions(
+    fileSize.value,
+    bitsPerPixel.value,
+    pixelFormat.value,
+    storageMode.value
   );
-  
-  return uniqueSizes.sort((a, b) => a.width * a.height - b.width * b.height);
 });
 
-// 验证参数是否有效
 const canApply = computed(() => {
-  if (!localWidth.value || !localHeight.value || localWidth.value <= 0 || localHeight.value <= 0) {
+  if (!fileSize.value || !localWidth.value || !localHeight.value || localWidth.value <= 0 || localHeight.value <= 0) {
     return false;
   }
-  
-  const fileBits = fileSize.value * 8;
-  const requiredBits = localWidth.value * localHeight.value * bitsPerPixel.value;
-  
-  return fileBits === requiredBits;
+
+  return matchesFileSize({
+    width: localWidth.value,
+    height: localHeight.value,
+    bitsPerPixel: bitsPerPixel.value,
+    pixelFormat: pixelFormat.value,
+    storageMode: storageMode.value
+  }, fileSize.value);
 });
 
-// 格式化文件大小
 const formatFileSize = (bytes) => {
   if (bytes === 0) return '0 B';
   const k = 1024;
@@ -205,74 +166,241 @@ const formatFileSize = (bytes) => {
   return `${formatted} (${t('units.bytesSuffix', { bytes })})`;
 };
 
-// 选择尺寸
-const selectSize = (size) => {
-  localWidth.value = size.width;
-  localHeight.value = size.height;
-  isManualInput.value = false;
-  updateStoreValues();
-  // 自动应用
-  if (canApply.value) {
-    emit('applyParams');
-  }
-};
-
-// 选择位深度
-const selectBitsPerPixel = (bits) => {
-  bitsPerPixel.value = bits;
-  // 自动选择该位深度下的推荐分辨率
-  findRecommendedResolutionForBits(bits);
-  updateStoreValues();
-  // 如果参数有效，自动应用
-  if (canApply.value) {
-    setTimeout(() => {
-      emit('applyParams');
-    }, 100);
-  }
-};
-
-// 交换宽高
-const swapDimensions = () => {
-  const tempWidth = localWidth.value;
-  localWidth.value = localHeight.value;
-  localHeight.value = tempWidth;
-  isManualInput.value = true;
-  updateStoreValues();
-};
-
-// 宽度变化处理
-const onWidthChange = () => {
-  if (isManualInput.value && localWidth.value > 0 && fileSize.value > 0) {
-    const fileBits = fileSize.value * 8;
-    const calculatedHeight = Math.round(fileBits / (localWidth.value * bitsPerPixel.value));
-    if (calculatedHeight > 0) {
-      localHeight.value = calculatedHeight;
-    }
-  }
-  isManualInput.value = true;
-  updateStoreValues();
-};
-
-// 高度变化处理
-const onHeightChange = () => {
-  if (isManualInput.value && localHeight.value > 0 && fileSize.value > 0) {
-    const fileBits = fileSize.value * 8;
-    const calculatedWidth = Math.round(fileBits / (localHeight.value * bitsPerPixel.value));
-    if (calculatedWidth > 0) {
-      localWidth.value = calculatedWidth;
-    }
-  }
-  isManualInput.value = true;
-  updateStoreValues();
-};
-
-// 更新store值
 const updateStoreValues = () => {
   width.value = localWidth.value;
   height.value = localHeight.value;
 };
 
-// 应用设置
+const emitApplyIfPossible = () => {
+  updateStoreValues();
+  if (canApply.value) {
+    setTimeout(() => emit('applyParams'), 0);
+  }
+};
+
+const applyRecommendedResolution = (autoApply = false) => {
+  const candidate = findRecommendedResolution(
+    fileSize.value,
+    bitsPerPixel.value,
+    pixelFormat.value,
+    storageMode.value
+  );
+
+  if (!candidate) {
+    return false;
+  }
+
+  localWidth.value = candidate.width;
+  localHeight.value = candidate.height;
+  isManualInput.value = false;
+  updateStoreValues();
+
+  if (autoApply && canApply.value) {
+    setTimeout(() => emit('applyParams'), 0);
+  }
+
+  return true;
+};
+
+const parseFileNameHints = (name) => {
+  if (!name) {
+    return null;
+  }
+
+  const normalized = name.toLowerCase();
+
+  const resolutionMatch =
+    normalized.match(/(?:^|[_-])(\d{2,5})[xX](\d{2,5})(?:[_\-.]|$)/i) ||
+    normalized.match(/w(\d{2,5}).*?h(\d{2,5})/i);
+
+  const payloadBitsMatch = normalized.match(/(\d{1,2})(?:msb|lsb)/i);
+  const bitsMatch =
+    payloadBitsMatch ||
+    normalized.match(/(?:^|[_-])(8|10|12|14|16)(?=bit(?:[_\-.]|$)|[_\-.]|$)/i) ||
+    normalized.match(/(\d{1,2})bit/i);
+
+  const formatMatch = normalized.match(/(?:^|[_-])(rggb|grbg|rgb|grayscale|gray|grey)(?:[_\-.]|$)/i);
+
+  let inferredStorageMode = null;
+  if (/(?:^|[_-])(packed|mipi)(?:[_\-.]|$)/i.test(normalized)) {
+    inferredStorageMode = 'packed';
+  } else if (/(?:^|[_-])(16bit|word16|msb)(?:[_\-.]|$)/i.test(normalized)) {
+    inferredStorageMode = 'word16';
+  }
+
+  return {
+    width: resolutionMatch ? Number.parseInt(resolutionMatch[1], 10) : null,
+    height: resolutionMatch ? Number.parseInt(resolutionMatch[2], 10) : null,
+    bitsPerPixel: bitsMatch ? Number.parseInt(bitsMatch[1], 10) : null,
+    pixelFormat: formatMatch
+      ? ({
+          gray: 'grayscale',
+          grey: 'grayscale',
+          grayscale: 'grayscale',
+          rgb: 'rgb',
+          rggb: 'rggb',
+          grbg: 'grbg'
+        }[formatMatch[1]])
+      : null,
+    storageMode: inferredStorageMode
+  };
+};
+
+const applyHintsFromFileName = () => {
+  const hints = parseFileNameHints(fileName.value);
+  if (!hints?.width || !hints?.height || !hints?.bitsPerPixel) {
+    return false;
+  }
+
+  const hintedPixelFormat = hints.pixelFormat || pixelFormat.value;
+  const storageCandidates = hints.storageMode ? [hints.storageMode] : ['packed', 'word16'];
+  const matchedStorage = storageCandidates.find(mode => {
+    return matchesFileSize({
+      width: hints.width,
+      height: hints.height,
+      bitsPerPixel: hints.bitsPerPixel,
+      pixelFormat: hintedPixelFormat,
+      storageMode: mode
+    }, fileSize.value);
+  });
+
+  if (!matchedStorage) {
+    return false;
+  }
+
+  bitsPerPixel.value = hints.bitsPerPixel;
+  pixelFormat.value = hintedPixelFormat;
+  storageMode.value = matchedStorage;
+  localWidth.value = hints.width;
+  localHeight.value = hints.height;
+  isManualInput.value = false;
+  updateStoreValues();
+  emitApplyIfPossible();
+  return true;
+};
+
+const findAndLoadValidParams = () => {
+  if (fileSize.value === 0) return;
+
+  if (applyHintsFromFileName()) {
+    return;
+  }
+
+  const searchOrder = [
+    { bits: 8, storage: 'packed' },
+    { bits: bitsPerPixel.value, storage: storageMode.value },
+    { bits: 10, storage: 'word16' },
+    { bits: 12, storage: 'word16' },
+    { bits: 14, storage: 'word16' },
+    { bits: 16, storage: 'word16' },
+    { bits: 10, storage: 'packed' },
+    { bits: 12, storage: 'packed' },
+    { bits: 14, storage: 'packed' },
+    { bits: 16, storage: 'packed' }
+  ];
+
+  const seen = new Set();
+
+  for (const candidate of searchOrder) {
+    const key = `${candidate.bits}:${candidate.storage}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+
+    const resolution = findRecommendedResolution(
+      fileSize.value,
+      candidate.bits,
+      pixelFormat.value,
+      candidate.storage
+    );
+
+    if (!resolution) {
+      continue;
+    }
+
+    bitsPerPixel.value = candidate.bits;
+    storageMode.value = candidate.storage;
+    localWidth.value = resolution.width;
+    localHeight.value = resolution.height;
+    isManualInput.value = false;
+    updateStoreValues();
+    emitApplyIfPossible();
+    return;
+  }
+
+  console.log(t('controls.noPresetFound'));
+};
+
+const updateCompanionDimension = (axis) => {
+  const totalPixels = calculateTotalPixels(
+    fileSize.value,
+    bitsPerPixel.value,
+    pixelFormat.value,
+    storageMode.value
+  );
+
+  if (!totalPixels) {
+    return;
+  }
+
+  if (axis === 'height' && localWidth.value > 0) {
+    localHeight.value = Math.max(1, Math.round(totalPixels / localWidth.value));
+  }
+
+  if (axis === 'width' && localHeight.value > 0) {
+    localWidth.value = Math.max(1, Math.round(totalPixels / localHeight.value));
+  }
+};
+
+const selectSize = (size) => {
+  localWidth.value = size.width;
+  localHeight.value = size.height;
+  isManualInput.value = false;
+  emitApplyIfPossible();
+};
+
+const selectBitsPerPixel = (bits) => {
+  bitsPerPixel.value = bits;
+  if (!applyRecommendedResolution(true)) {
+    emitApplyIfPossible();
+  }
+};
+
+const selectStorageMode = (mode) => {
+  storageMode.value = mode;
+  if (!applyRecommendedResolution(true)) {
+    emitApplyIfPossible();
+  }
+};
+
+const handlePixelFormatChange = () => {
+  if (!applyRecommendedResolution(true)) {
+    emitApplyIfPossible();
+  }
+};
+
+const swapDimensions = () => {
+  const nextWidth = localHeight.value;
+  const nextHeight = localWidth.value;
+  localWidth.value = nextWidth;
+  localHeight.value = nextHeight;
+  isManualInput.value = true;
+  updateStoreValues();
+};
+
+const onWidthChange = () => {
+  isManualInput.value = true;
+  updateCompanionDimension('height');
+  updateStoreValues();
+};
+
+const onHeightChange = () => {
+  isManualInput.value = true;
+  updateCompanionDimension('width');
+  updateStoreValues();
+};
+
 const applySettings = () => {
   if (canApply.value) {
     updateStoreValues();
@@ -280,140 +408,6 @@ const applySettings = () => {
   }
 };
 
-// 查找精确匹配的分辨率（处理非标准宽高比）
-const findExactResolutions = (totalPixels) => {
-  const matches = [];
-  
-  // 获取所有可能的因数对
-  const getFactorPairs = (n) => {
-    const pairs = [];
-    const sqrt = Math.sqrt(n);
-    
-    for (let i = Math.max(100, Math.floor(sqrt / 10)); i <= Math.min(sqrt * 10, 8000); i++) {
-      if (n % i === 0) {
-        const width = i;
-        const height = n / i;
-        
-        // 只选择合理的分辨率范围
-        if (height >= 100 && height <= 8000) {
-          // 添加约束：宽高都必须为8的整倍数
-          if (width % 8 === 0 && height % 8 === 0) {
-            const ratio = width / height;
-            
-            // 检查是否接近某个标准宽高比
-            const standardRatios = [
-              { name: '16:9', value: 16/9 },
-              { name: '16:10', value: 16/10 },
-              { name: '3:2', value: 3/2 },
-              { name: '4:3', value: 4/3 },
-              { name: '1:1', value: 1 },
-              { name: '5:4', value: 5/4 },
-              { name: '2:1', value: 2/1 },
-              { name: '21:9', value: 21/9 }
-            ];
-            
-            const closest = standardRatios.reduce((prev, curr) => {
-              const prevDiff = Math.abs(ratio - prev.value);
-              const currDiff = Math.abs(ratio - curr.value);
-              return currDiff < prevDiff ? curr : prev;
-            });
-            
-            // 只有在差异在1%以内时才包含此分辨率
-            if (Math.abs(ratio - closest.value) < 0.01) {
-              pairs.push({
-                width,
-                height,
-                ratio: closest.name
-              });
-            }
-          }
-        }
-      }
-    }
-    
-    return pairs;
-  };
-  
-  return getFactorPairs(totalPixels);
-};
-
-// 为指定位深度查找推荐分辨率
-const findRecommendedResolutionForBits = (bits) => {
-  if (fileSize.value === 0) return;
-  
-  const fileBits = fileSize.value * 8;
-  const totalPixels = fileBits / bits;
-  
-  // 优先尝试标准宽高比
-  const sortedAspectRatios = [...aspectRatios].sort((a, b) => {
-    // 优先级：16:9 > 16:10 > 3:2 > 4:3 > 1:1 > 5:4 > 2:1 > 21:9
-    const priority = { '16:9': 8, '16:10': 7, '3:2': 6, '4:3': 5, '1:1': 4, '5:4': 3, '2:1': 2, '21:9': 1 };
-    return (priority[b.ratio] || 0) - (priority[a.ratio] || 0);
-  });
-  
-  // 对每个宽高比计算可能的尺寸
-  for (const ar of sortedAspectRatios) {
-    const baseSize = Math.sqrt(totalPixels / (ar.w * ar.h));
-    
-    // 尝试不同的整数倍数
-    for (let multiplier = 1; multiplier <= 100; multiplier++) {
-      const width = Math.round(baseSize * ar.w * multiplier);
-      const height = Math.round(baseSize * ar.h * multiplier);
-      
-      // 验证是否精确匹配
-      if (width * height * bits === fileBits && width > 0 && height > 0) {
-        // 找到合法参数，更新本地状态
-        localWidth.value = width;
-        localHeight.value = height;
-        isManualInput.value = false;
-        return;
-      }
-    }
-  }
-  
-  // 如果标准宽高比没有找到，尝试精确匹配（处理非标准宽高比）
-  const exactMatches = findExactResolutions(totalPixels);
-  if (exactMatches.length > 0) {
-    // 选择第一个精确匹配（通常是最大的合理分辨率）
-    const match = exactMatches[0];
-    localWidth.value = match.width;
-    localHeight.value = match.height;
-    isManualInput.value = false;
-    return;
-  }
-};
-
-// 按位深度从大到小查找合法参数并加载
-const findAndLoadValidParams = () => {
-  if (fileSize.value === 0) return;
-  
-  const bitsToTry = [16, 14, 12, 10, 8];
-  
-  for (const bits of bitsToTry) {
-    // 使用推荐分辨率查找逻辑
-    const originalWidth = localWidth.value;
-    const originalHeight = localHeight.value;
-    
-    findRecommendedResolutionForBits(bits);
-    
-    // 检查是否找到了有效的分辨率
-    if (localWidth.value !== originalWidth || localHeight.value !== originalHeight) {
-      // 找到合法参数，直接加载
-      bitsPerPixel.value = bits;
-      updateStoreValues();
-      // 自动应用
-      setTimeout(() => {
-        emit('applyParams');
-      }, 100);
-      return;
-    }
-  }
-  
-  // 所有位深度都没有合法参数，等待用户手动输入
-  console.log(t('controls.noPresetFound'));
-};
-
-// 监听文件大小变化，按位深度从大到小查找合法参数
 watch(fileSize, (newSize) => {
   if (newSize > 0) {
     findAndLoadValidParams();
@@ -552,13 +546,19 @@ watch(fileSize, (newSize) => {
   opacity: 0.8;
 }
 
-.bits-grid {
+.bits-grid,
+.storage-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 6px;
 }
 
-.bits-btn {
+.bits-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.bits-btn,
+.storage-btn {
   padding: 8px 4px;
   font-size: 11px;
   background-color: var(--vscode-button-secondaryBackground);
@@ -570,11 +570,13 @@ watch(fileSize, (newSize) => {
   text-align: center;
 }
 
-.bits-btn:hover {
+.bits-btn:hover,
+.storage-btn:hover {
   background-color: var(--vscode-button-secondaryHoverBackground);
 }
 
-.bits-btn.active {
+.bits-btn.active,
+.storage-btn.active {
   background-color: var(--vscode-button-background);
   color: var(--vscode-button-foreground);
   font-weight: bold;
