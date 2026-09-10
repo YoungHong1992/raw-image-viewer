@@ -316,13 +316,39 @@ interface ExtensionConfig { enableBinSupport }
 
 ## 🧪 测试
 
-### 测试文件
-- `src/test/suite/extension.test.ts` - 扩展功能测试
+### 四个测试层级
+
+| 层级 | 命令 | 位置 | 说明 |
+|------|------|------|------|
+| 单元测试 | `npm run test:unit` | `src/test/unit/*.test.ts` | 纯逻辑：校验、分辨率推荐、采样解码 |
+| Webview E2E | `npm run test:e2e:webview` | `webview/e2e/*.spec.js` | Playwright 驱动真实浏览器中的生产构建产物 |
+| VS Code E2E | `npm run test:e2e:vscode` | `src/test/e2e/*.test.ts` | `vscode-extension-tester` 启动真实 VS Code 验证 Webview |
+| 宿主集成测试 | `npm run test:integration` | `src/test/suite/*.test.ts` | 在 VS Code 测试宿主中验证激活与配置 |
+
+`npm test` = `compile` + `lint` + `test:unit`。
+
+### Webview E2E (Playwright)
+
+- 配置：`webview/playwright.config.js`（`testDir: ./e2e`），`webServer` 会在 4173 端口启动 `vite preview`。
+- **运行前必须先构建 Webview**：`npm run build:webview`，否则测试跑的是旧产物。
+- 公共辅助：`webview/e2e/helpers/webview.js` 提供 `openWebview` / `loadImage` / `canvasPixel` / `hoverPixel` 等。
+- 与宿主的唯一耦合点是 `main.js` 顶层的 `acquireVsCodeApi()`；辅助模块用 `addInitScript` 注入桩对象后再 `goto('/')`，因此生产代码无需任何测试专用分支。
+- 断言依据：`StatusBar.vue` 的 `#image-size` / `#pixel-info` / `#cursor-pos` / `#file-info`，以及 `ControlsPanel.vue` 的 `.bits-btn` / `.storage-btn` / `button.apply-button`。
+
+### VS Code E2E (vscode-extension-tester)
+
+- `npm run test:e2e:vscode` 会自动打包 VSIX、安装到隔离的 `.test-resources`、启动 VS Code + ChromeDriver，并在进程内运行 mocha。
+- 测试体本身**不需要**启动 VS Code，`VSRunner` 已在 `beforeAll` / `afterAll` 中完成。
+- 打开自定义编辑器后必须 `new WebView().switchToFrame()` 才能查询 Webview 内的元素，结束后 `switchBack()`。
+- 失败用例会自动截图到 `.test-resources/screenshots/`。
+- 该套件定位为**本地验证**，未接入 CI（CI 只跑单元测试 + Webview E2E + 宿主集成测试）。
 
 ### 测试覆盖
 - 配置键定义验证
 - 扩展激活验证
 - 导出函数验证
+- Webview 端到端：启动消息、缩放（含 1:1 回归）、6 种像素格式渲染
+- VS Code 端到端：真实窗口中的分辨率推断、缩放、悬停取色、位深度/存储布局联动
 
 ---
 

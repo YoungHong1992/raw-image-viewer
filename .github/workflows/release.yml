@@ -42,6 +42,14 @@ jobs:
     - name: Run unit tests
       run: npm run test:unit
     
+    - name: Install Playwright browsers
+      run: npx playwright install --with-deps chromium
+      working-directory: webview
+    
+    - name: Run webview E2E tests
+      run: xvfb-run -a npm run test:e2e
+      working-directory: webview
+    
     - name: Run integration tests
       run: xvfb-run -a npm run test:integration
 

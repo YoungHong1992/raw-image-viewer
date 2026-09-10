@@ -10,15 +10,20 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - **Selectable storage layouts**: `packed bitstream` and `16-bit container` (little-endian, high-bit aligned) instead of a single fixed byte layout
 - **Shared decoding module**: size validation, resolution recommendation, and rendering now live in `src/shared/` and are reused by the extension and the webview
 - **Unit test suite** (`npm run test:unit`) covering validation, resolution recommendation, and sample decoding
+- **Webview end-to-end suite** (`npm run test:e2e:webview`): Playwright drives the production webview build in a real browser, covering boot, message protocol, zoom, and every pixel format
+- **VS Code end-to-end suite** (`npm run test:e2e:vscode`): `vscode-extension-tester` launches a real VS Code window, opens a `.raw` file in the custom editor, and asserts on the rendered webview
 
 ### Fixed
 - **GBRG and BGGR Bayer patterns now render correctly**: both formats were selectable but produced black pixels; all four Bayer patterns share a single demosaic lookup table
 - **Default storage layout aligned with previous releases**: 10/12/14/16 bpp files open as `16-bit container` again, so existing files render as before
 - **File size validation restored to a tolerant range**: files up to 50% larger than the exact frame size are accepted again, covering line padding and appended metadata
+- **`1:1` zoom did nothing**: the reset handler set the zoom to 100% and then immediately overrode it with the fit-to-window scale, so the button appeared dead
+- **Fit-to-window could clamp below 100%**: the zoom range is now always guaranteed to contain `1:1`, so tiny images no longer get stuck at a fractional scale
 
 ### Changed
 - File size mismatch errors now report the accepted range instead of a single exact size
 - `npm test` runs compile, lint, and unit tests; the VS Code host integration tests are available via `npm run test:integration`
+- CI and the release workflow also run the webview end-to-end suite on a virtual display
 
 ## [0.0.3] - 2025-01-27
 

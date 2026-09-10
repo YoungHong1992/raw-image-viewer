@@ -208,10 +208,22 @@ const zoom = (factor) => {
 const zoomIn = () => zoom(1.5);
 const zoomOut = () => zoom(0.75);
 
+const centerImage = () => {
+  if (!canvas.value || !width.value || !height.value) return;
+  const container = canvas.value.parentElement;
+  if (!container) return;
+
+  const containerRect = container.getBoundingClientRect();
+  imageOffset.value = {
+    x: (containerRect.width - width.value * zoomLevel.value) / 2,
+    y: (containerRect.height - height.value * zoomLevel.value) / 2
+  };
+  updateImagePosition();
+};
+
 const resetZoom = () => {
   zoomLevel.value = 1;
-  imageOffset.value = { x: 0, y: 0 };
-  fitToWindow();
+  centerImage();
 };
 
 const fitToWindow = () => {
@@ -224,13 +236,11 @@ const fitToWindow = () => {
   const scaleY = containerRect.height / height.value;
   const fitScale = Math.min(scaleX, scaleY) * 0.95;
 
-  minZoom = Math.max(0.05, fitScale * 0.5);
-  zoomLevel.value = fitScale;
-  imageOffset.value = {
-    x: (containerRect.width - width.value * zoomLevel.value) / 2,
-    y: (containerRect.height - height.value * zoomLevel.value) / 2
-  };
-  updateImagePosition();
+  // The zoom range must always contain 1:1, otherwise "1:1" gets clamped back
+  // to fitScale for very small images.
+  minZoom = Math.max(0.05, Math.min(1, fitScale * 0.5));
+  zoomLevel.value = Math.max(minZoom, Math.min(maxZoom, fitScale));
+  centerImage();
 };
 
 const handleWheel = (event) => {

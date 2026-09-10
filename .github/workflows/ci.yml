@@ -49,8 +49,24 @@ jobs:
     - name: Run unit tests
       run: npm run test:unit
     
+    - name: Install Playwright browsers
+      run: npx playwright install --with-deps chromium
+      working-directory: webview
+    
+    - name: Run webview E2E tests
+      run: xvfb-run -a npm run test:e2e
+      working-directory: webview
+    
     - name: Run integration tests
       run: xvfb-run -a npm run test:integration
+    
+    - name: Upload Playwright report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-report
+        path: webview/playwright-report/
+        retention-days: 7
     
     - name: Package extension (dry run)
       run: npm run package
