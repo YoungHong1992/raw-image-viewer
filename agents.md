@@ -44,13 +44,20 @@ raw-image-viewer/
 │   │   ├── types.ts          # TypeScript 类型定义
 │   │   └── utils.ts          # 工具函数
 │   └── test/                 # 测试代码
-│       ├── runTest.ts        # 测试运行器
+│       ├── runTest.ts        # 宿主集成测试运行器
+│       ├── runUnitTests.ts   # 单元测试运行器
+│       ├── unit/             # 单元测试 (mocha)
+│       ├── e2e/              # VS Code E2E (vscode-extension-tester)
 │       └── suite/
-│           ├── extension.test.ts  # 扩展测试
+│           ├── extension.test.ts  # 宿主集成测试
 │           └── index.ts
 ├── webview/                   # Webview UI (Vue 3)
 │   ├── package.json          # Webview 依赖
 │   ├── vite.config.js        # Vite 构建配置
+│   ├── playwright.config.js  # Webview E2E 配置
+│   ├── e2e/                  # Webview E2E (Playwright)
+│   │   ├── helpers/webview.js
+│   │   └── *.spec.js
 │   ├── index.html            # HTML 入口
 │   └── src/
 │       ├── App.vue           # 根组件
@@ -323,7 +330,7 @@ interface ExtensionConfig { enableBinSupport }
 | 单元测试 | `npm run test:unit` | `src/test/unit/*.test.ts` | 纯逻辑：校验、分辨率推荐、采样解码 |
 | Webview E2E | `npm run test:e2e:webview` | `webview/e2e/*.spec.js` | Playwright 驱动真实浏览器中的生产构建产物 |
 | VS Code E2E | `npm run test:e2e:vscode` | `src/test/e2e/*.test.ts` | `vscode-extension-tester` 启动真实 VS Code 验证 Webview |
-| 宿主集成测试 | `npm run test:integration` | `src/test/suite/*.test.ts` | 在 VS Code 测试宿主中验证激活与配置 |
+| 宿主集成测试 | `npm run test:integration` | `src/test/suite/*.test.ts` | 在 VS Code 测试宿主中验证激活、命令与自定义编辑器文档加载 |
 
 `npm test` = `compile` + `lint` + `test:unit`。
 
@@ -334,21 +341,23 @@ interface ExtensionConfig { enableBinSupport }
 - 公共辅助：`webview/e2e/helpers/webview.js` 提供 `openWebview` / `loadImage` / `canvasPixel` / `hoverPixel` 等。
 - 与宿主的唯一耦合点是 `main.js` 顶层的 `acquireVsCodeApi()`；辅助模块用 `addInitScript` 注入桩对象后再 `goto('/')`，因此生产代码无需任何测试专用分支。
 - 断言依据：`StatusBar.vue` 的 `#image-size` / `#pixel-info` / `#cursor-pos` / `#file-info`，以及 `ControlsPanel.vue` 的 `.bits-btn` / `.storage-btn` / `button.apply-button`。
+- 用例分布：`boot` / `rendering` / `zoom` / `interaction`（控件与 Apply 门控）/ `hints`（文件名推断）/ `errors`（无效参数与超大图保护）。
 
 ### VS Code E2E (vscode-extension-tester)
 
 - `npm run test:e2e:vscode` 会自动打包 VSIX、安装到隔离的 `.test-resources`、启动 VS Code + ChromeDriver，并在进程内运行 mocha。
 - 测试体本身**不需要**启动 VS Code，`VSRunner` 已在 `beforeAll` / `afterAll` 中完成。
 - 打开自定义编辑器后必须 `new WebView().switchToFrame()` 才能查询 Webview 内的元素，结束后 `switchBack()`。
-- 失败用例会自动截图到 `.test-resources/screenshots/`。
+- **`switchBack()` 是硬性要求**：`VSBrowser.instance.openResources` / `EditorView.getOpenEditorTitles` 都是拖到顶层文档的操作，若驱动仍停留在 Webview iframe 中，`waitForWorkbench` 会在 30 秒后以 `Workbench was not loaded properly` 失败。
+- 需要切换标签页验证时，顺序是 `switchToFrame()` → 断言 → `switchBack()` → `openResources(其他文件)` → `new EditorView().openEditor(原文件)` → **再次 `new WebView()`**（WebView 对象必须在标签页激活后构造）。
+- 失败用例会自动截图到 `.test-resources/screenshots/`，驱动日志在 `.test-resources/test.log`（排查超时问题首选）。
 - 该套件定位为**本地验证**，未接入 CI（CI 只跑单元测试 + Webview E2E + 宿主集成测试）。
 
 ### 测试覆盖
-- 配置键定义验证
-- 扩展激活验证
-- 导出函数验证
-- Webview 端到端：启动消息、缩放（含 1:1 回归）、6 种像素格式渲染
-- VS Code 端到端：真实窗口中的分辨率推断、缩放、悬停取色、位深度/存储布局联动
+- 单元测试：文件大小校验（含容差与填充）、分辨率推荐、`calculateRequiredBytes`、packed/16-bit 容器解码、四种 Bayer 模式
+- Webview 端到端：启动消息协议、6 种像素格式渲染、位深度/存储布局/像素格式与 Apply 门控、文件名分辨率与位深度推断、无效参数与超大图错误上报、缩放（1:1 回归、Fit、按钮与滚轮）
+- VS Code 端到端：真实窗口中的分辨率推断、Canvas 尺寸、像素格式选项、Apply 门控、位深度联动、悬停取色、缩放按钮、Fit、`.bin` 打开、切标签页后的 Webview 状态保留
+- 宿主集成：配置键与默认值、扩展激活与命令注册、`.raw`/`.bin` 文档加载与 `enableBinSupport` 关闭时的拒绝、`openWithRawViewer` 命令打开的视图类型
 
 ---
 

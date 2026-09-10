@@ -10,8 +10,9 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - **Selectable storage layouts**: `packed bitstream` and `16-bit container` (little-endian, high-bit aligned) instead of a single fixed byte layout
 - **Shared decoding module**: size validation, resolution recommendation, and rendering now live in `src/shared/` and are reused by the extension and the webview
 - **Unit test suite** (`npm run test:unit`) covering validation, resolution recommendation, and sample decoding
-- **Webview end-to-end suite** (`npm run test:e2e:webview`): Playwright drives the production webview build in a real browser, covering boot, message protocol, zoom, and every pixel format
-- **VS Code end-to-end suite** (`npm run test:e2e:vscode`): `vscode-extension-tester` launches a real VS Code window, opens a `.raw` file in the custom editor, and asserts on the rendered webview
+- **Webview end-to-end suite** (`npm run test:e2e:webview`): Playwright drives the production webview build in a real browser, covering boot, message protocol, zoom, controls, resolution/bit-depth/storage/format selection, file-name hints, hover readout, error states, and every pixel format
+- **VS Code end-to-end suite** (`npm run test:e2e:vscode`): `vscode-extension-tester` launches a real VS Code window, opens `.raw` and `.bin` files in the custom editor, exercises the zoom controls, and verifies that the webview keeps its state while its tab is hidden
+- **Host integration suite** (`npm run test:integration`) now covers activation, command registration, and custom-editor document loading, including the `enableBinSupport` gate
 
 ### Fixed
 - **GBRG and BGGR Bayer patterns now render correctly**: both formats were selectable but produced black pixels; all four Bayer patterns share a single demosaic lookup table
@@ -19,6 +20,9 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - **File size validation restored to a tolerant range**: files up to 50% larger than the exact frame size are accepted again, covering line padding and appended metadata
 - **`1:1` zoom did nothing**: the reset handler set the zoom to 100% and then immediately overrode it with the fit-to-window scale, so the button appeared dead
 - **Fit-to-window could clamp below 100%**: the zoom range is now always guaranteed to contain `1:1`, so tiny images no longer get stuck at a fractional scale
+- **`Fit to window` and `1:1` ignored the image on screen**: both centred on the pending control values instead of the rendered bitmap, so the image drifted out of view after editing the resolution without applying it
+- **Hover readout used the pending resolution**: the pixel probe indexed the decoded frame with the unapplied width/height, reporting unrelated samples and `NaN` outside the buffer
+- **Failed renders were silent**: a decode error such as the 50-megapixel guard now reports the message in the status bar instead of leaving an empty canvas
 
 ### Changed
 - File size mismatch errors now report the accepted range instead of a single exact size

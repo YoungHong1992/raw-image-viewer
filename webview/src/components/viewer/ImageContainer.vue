@@ -108,6 +108,7 @@ const displayRawImage = async (data, imgWidth, imgHeight, bitsPerPixel, pixelFor
       }, 10);
     } catch (error) {
       console.error(t('viewer.errors.processingError'), error);
+      store.error = error instanceof Error ? error.message : String(error);
       pixelR.value = 0;
       pixelG.value = 0;
       pixelB.value = 0;
@@ -131,11 +132,19 @@ const handleMouseMove = (event) => {
   cursorX.value = x;
   cursorY.value = y;
 
-  if (x >= 0 && x < width.value && y >= 0 && y < height.value && renderedPixels) {
-    const pixelIndex = (y * width.value + x) * 4;
+  // Index into the rendered buffer, not the pending store params: editing the
+  // resolution without applying leaves those two out of sync.
+  const { width: renderedWidth, height: renderedHeight } = renderedSize();
+
+  if (x >= 0 && x < renderedWidth && y >= 0 && y < renderedHeight && renderedPixels) {
+    const pixelIndex = (y * renderedWidth + x) * 4;
     pixelR.value = renderedPixels[pixelIndex];
     pixelG.value = renderedPixels[pixelIndex + 1];
     pixelB.value = renderedPixels[pixelIndex + 2];
+  } else {
+    pixelR.value = 0;
+    pixelG.value = 0;
+    pixelB.value = 0;
   }
 };
 
@@ -208,15 +217,22 @@ const zoom = (factor) => {
 const zoomIn = () => zoom(1.5);
 const zoomOut = () => zoom(0.75);
 
+/** Zoom/centering must follow the bitmap on screen; the controls may hold unapplied values. */
+const renderedSize = () => ({
+  width: canvasWidth.value || width.value,
+  height: canvasHeight.value || height.value
+});
+
 const centerImage = () => {
-  if (!canvas.value || !width.value || !height.value) return;
+  const { width: renderedWidth, height: renderedHeight } = renderedSize();
+  if (!canvas.value || !renderedWidth || !renderedHeight) return;
   const container = canvas.value.parentElement;
   if (!container) return;
 
   const containerRect = container.getBoundingClientRect();
   imageOffset.value = {
-    x: (containerRect.width - width.value * zoomLevel.value) / 2,
-    y: (containerRect.height - height.value * zoomLevel.value) / 2
+    x: (containerRect.width - renderedWidth * zoomLevel.value) / 2,
+    y: (containerRect.height - renderedHeight * zoomLevel.value) / 2
   };
   updateImagePosition();
 };
@@ -227,13 +243,14 @@ const resetZoom = () => {
 };
 
 const fitToWindow = () => {
-  if (!canvas.value || !width.value || !height.value) return;
+  const { width: renderedWidth, height: renderedHeight } = renderedSize();
+  if (!canvas.value || !renderedWidth || !renderedHeight) return;
   const container = canvas.value.parentElement;
   if (!container) return;
 
   const containerRect = container.getBoundingClientRect();
-  const scaleX = containerRect.width / width.value;
-  const scaleY = containerRect.height / height.value;
+  const scaleX = containerRect.width / renderedWidth;
+  const scaleY = containerRect.height / renderedHeight;
   const fitScale = Math.min(scaleX, scaleY) * 0.95;
 
   // The zoom range must always contain 1:1, otherwise "1:1" gets clamped back

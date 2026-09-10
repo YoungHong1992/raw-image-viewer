@@ -1,12 +1,15 @@
 import { expect, test } from '@playwright/test';
-import { loadImage, controls, openWebview, status, clickZoomControl, CANVAS } from './helpers/webview.js';
+import {
+  loadImage,
+  controls,
+  openWebview,
+  status,
+  clickZoomControl,
+  canvasTransform,
+} from './helpers/webview.js';
 
 const RAMP_16 = Array.from({ length: 16 }, (_unused, index) => index);
 const GRAYSCALE_640x480_BYTES = 640 * 480;
-
-function canvasTransform(page) {
-  return page.locator(CANVAS).evaluate((canvas) => canvas.style.transform);
-}
 
 async function loadLargeFixture(page) {
   await loadImage(page, {

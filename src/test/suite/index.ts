@@ -6,7 +6,9 @@ export function run(): Promise<void> {
   // 创建 mocha 测试
   const mocha = new Mocha({
     ui: 'tdd',
-    color: true
+    color: true,
+    // Custom editor tests have to wait for the workbench to open a tab.
+    timeout: 30_000
   });
 
   const testsRoot = path.resolve(__dirname, '.');

@@ -30,14 +30,17 @@ export function messagesToHost(page) {
  * Either pass explicit `bytes`, or `length` to generate a 0..255 ramp.
  */
 export async function loadImage(page, { bytes, length, fileName = 'fixture.raw', locale = 'en' }) {
+  if (!bytes && length) {
+    await loadGeneratedImage(page, { length, fileName, locale });
+    return;
+  }
+
   await page.evaluate(
-    ({ sample, generatedLength, fileName, locale }) => {
-      const value = sample ?? Array.from({ length: generatedLength }, (_, index) => index & 0xff);
-      window.postMessage({ type: 'init', body: { value, editable: false, locale, fileName } }, '*');
+    ({ sample, fileName, locale }) => {
+      window.postMessage({ type: 'init', body: { value: sample, editable: false, locale, fileName } }, '*');
     },
     {
-      sample: bytes ? Array.from(bytes) : null,
-      generatedLength: length ?? 0,
+      sample: Array.from(bytes ?? []),
       fileName,
       locale,
     }
@@ -54,6 +57,25 @@ export function status(page) {
   };
 }
 
+/**
+ * Same as loadImage with `length`, but the buffer is allocated and filled inside
+ * the page: serialising a multi-megabyte array through evaluate would dominate
+ * the runtime.
+ */
+export async function loadGeneratedImage(page, { length, fileName, locale = 'en' }) {
+  await page.evaluate(
+    ({ length, fileName, locale }) => {
+      const value = new Uint8Array(length);
+      for (let index = 0; index < length; index += 1) {
+        value[index] = index & 0xff;
+      }
+
+      window.postMessage({ type: 'init', body: { value, editable: false, locale, fileName } }, '*');
+    },
+    { length, fileName, locale }
+  );
+}
+
 export function controls(page) {
   return {
     width: page.locator('.controls-panel input[type=number]').first(),
@@ -62,8 +84,15 @@ export function controls(page) {
     apply: page.locator('button.apply-button'),
     storageModes: page.locator('.storage-btn'),
     bitDepths: page.locator('.bits-btn'),
+    sizes: page.locator('.size-btn'),
+    swap: page.locator('button.swap-button'),
+    fileBytes: page.locator('.controls-panel input.readonly-input'),
     zoom: page.locator('.zoom-controls span'),
   };
+}
+
+export function canvasTransform(page) {
+  return page.locator(CANVAS).evaluate((canvas) => canvas.style.transform);
 }
 
 export async function selectBitDepth(page, bits) {
@@ -115,4 +144,36 @@ export async function hoverPixel(page, x, y) {
 
 export async function clickZoomControl(page, title) {
   await page.locator(`.zoom-controls button[title="${title}"]`).click();
+}
+
+/**
+ * Loads a fixture, applies the given settings and waits for the canvas to match.
+ * Prefer `length` over `bytes` for anything large, see loadGeneratedImage.
+ */
+export async function renderImage(page, {
+  bytes,
+  length,
+  fileName = 'fixture.raw',
+  format = 'grayscale',
+  width,
+  height,
+  bitsPerPixel = 8,
+  storage = 'Packed bitstream',
+}) {
+  await loadImage(page, { bytes, length, fileName });
+
+  await selectBitDepth(page, bitsPerPixel);
+  await selectStorageMode(page, storage);
+  await controls(page).format.selectOption(format);
+  await setResolution(page, width, height);
+
+  await expect(controls(page).apply).toBeEnabled();
+  await controls(page).apply.click();
+  await expect(status(page).imageSize).toHaveText(`Image: ${width}×${height}`);
+}
+
+/** Client coordinates of the centre of the canvas, for wheel and drag gestures. */
+export async function canvasCentre(page) {
+  const box = await page.locator(CANVAS).boundingBox();
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }

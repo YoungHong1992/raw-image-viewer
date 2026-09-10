@@ -51,9 +51,9 @@ The project has four test layers:
 | Layer | Command | What it covers |
 |-------|---------|----------------|
 | Unit | `npm run test:unit` | Pure logic: size validation, resolution recommendation, sample decoding |
-| Webview E2E | `npm run test:e2e:webview` | Playwright drives the built webview in a real browser (boot, zoom, every pixel format) |
+| Webview E2E | `npm run test:e2e:webview` | Playwright drives the built webview in a real browser (boot, zoom, controls, hints, errors, every pixel format) |
 | VS Code E2E | `npm run test:e2e:vscode` | `vscode-extension-tester` launches a real VS Code window and asserts on the custom editor webview |
-| Host integration | `npm run test:integration` | Activation and configuration inside the VS Code test host |
+| Host integration | `npm run test:integration` | Activation, commands, and custom-editor document loading inside the VS Code test host |
 
 `npm run test:e2e:webview` needs the webview to be built first (`npm run build:webview`); on a headless machine prefix it with `xvfb-run -a`.
 `npm run test:e2e:vscode` is a local-only check: it packages the extension, installs it into `.test-resources/`, and downloads VS Code on first run.
