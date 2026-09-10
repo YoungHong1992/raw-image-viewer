@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { COMMON_RESOLUTIONS, SUPPORTED_BITS_PER_PIXEL, PIXEL_FORMATS } from '../../../src/shared/constants';
-import { validateImageParams } from '../../../src/shared/utils';
+import { COMMON_RESOLUTIONS, SUPPORTED_BITS_PER_PIXEL, PIXEL_FORMATS, STORAGE_MODES } from '../../../src/shared/constants';
+import { defaultStorageModeForBitDepth, validateImageParams } from '../../../src/shared/utils';
 
 export const useImageStore = defineStore('image', () => {
   // i18n
@@ -17,9 +17,14 @@ export const useImageStore = defineStore('image', () => {
         height: 'Height:',
         swapDimensions: 'Swap width/height',
         bitDepth: 'Bit depth',
+        storageMode: 'Sample storage',
         pixelFormat: 'Pixel format',
         apply: 'Apply',
         noPresetFound: 'No valid preset found. Waiting for manual input.',
+      },
+      storageMode: {
+        packed: 'Packed bitstream',
+        word16: '16-bit container',
       },
       pixelFormat: {
         grayscale: 'Grayscale',
@@ -66,9 +71,14 @@ export const useImageStore = defineStore('image', () => {
         height: '高度:',
         swapDimensions: '交换宽高',
         bitDepth: '位深度',
+        storageMode: '样本存储方式',
         pixelFormat: '像素格式',
         apply: '应用设置',
         noPresetFound: '未找到合法的预设参数，等待用户手动输入',
+      },
+      storageMode: {
+        packed: '位流打包',
+        word16: '16位容器',
       },
       pixelFormat: {
         grayscale: '灰度',
@@ -136,10 +146,13 @@ export const useImageStore = defineStore('image', () => {
 
   // 状态
   const rawData = ref(null);
+  const fileName = ref('');
   const fileSize = ref(0);
+  const defaultBitsPerPixel = 10;
   const width = ref(2688);
   const height = ref(1520);
-  const bitsPerPixel = ref(10);
+  const bitsPerPixel = ref(defaultBitsPerPixel);
+  const storageMode = ref(defaultStorageModeForBitDepth(defaultBitsPerPixel));
   const pixelFormat = ref('grayscale');
   const ready = ref(false);
   const error = ref(null);
@@ -156,6 +169,7 @@ export const useImageStore = defineStore('image', () => {
   // 常量（从共享模块导入）
   const commonResolutions = ref(COMMON_RESOLUTIONS);
   const availableBits = ref(SUPPORTED_BITS_PER_PIXEL);
+  const availableStorageModes = ref(STORAGE_MODES);
   const availableFormats = ref(PIXEL_FORMATS);
 
   // 操作
@@ -163,6 +177,10 @@ export const useImageStore = defineStore('image', () => {
     rawData.value = data;
     fileSize.value = data.length;
     error.value = null;
+  }
+
+  function setFileName(name) {
+    fileName.value = name || '';
   }
 
   function validateParams() {
@@ -175,7 +193,8 @@ export const useImageStore = defineStore('image', () => {
       width: width.value,
       height: height.value,
       bitsPerPixel: bitsPerPixel.value,
-      pixelFormat: pixelFormat.value
+      pixelFormat: pixelFormat.value,
+      storageMode: storageMode.value
     };
 
     const validation = validateImageParams(params, fileSize.value, locale.value);
@@ -196,10 +215,12 @@ export const useImageStore = defineStore('image', () => {
 
     // 状态
     rawData,
+    fileName,
     fileSize,
     width,
     height,
     bitsPerPixel,
+    storageMode,
     pixelFormat,
     ready,
     error,
@@ -214,10 +235,12 @@ export const useImageStore = defineStore('image', () => {
     // 常量
     commonResolutions,
     availableBits,
+    availableStorageModes,
     availableFormats,
     
     // 操作
     setRawData,
+    setFileName,
     validateParams,
   };
 });

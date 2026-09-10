@@ -18,9 +18,14 @@ export const PIXEL_FORMATS = [
   'grayscale',
   'rgb', 
   'rggb',
-  'grbg', 
+  'grbg',
   'gbrg',
   'bggr'
+] as const;
+
+export const STORAGE_MODES = [
+  'packed',
+  'word16'
 ] as const;
 
 export const COMMON_RESOLUTIONS = [

@@ -12,6 +12,15 @@ webview/node_modules/
 .vscode-test/
 .vscode-test.mjs
 
+# Playwright (webview E2E)
+webview/playwright-report/
+webview/test-results/
+
+# vscode-extension-tester (VS Code E2E)
+.test-resources/
+.test-extensions/
+test-fixtures/
+
 # Vite cache and build artifacts
 .vite/
 webview/.vite/

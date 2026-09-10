@@ -1,48 +1,69 @@
 # Raw Image Viewer
 
-A professional RAW image viewer extension for Visual Studio Code that provides intelligent image processing and visualization capabilities.
+A Visual Studio Code extension for inspecting raw image buffers with adjustable resolution, bit depth, storage layout, and Bayer decoding.
 
 ## Features
 
-- **Smart RAW Image Processing**: Automatically detects and processes various RAW image formats
-- **Multiple Pixel Formats**: Support for RGGB, BGGR, GRBG, GBRG Bayer patterns
-- **Intelligent Resolution**: Smart recommendations for optimal image dimensions
-- **Real-time Preview**: Instant visualization with adjustable parameters
-- **Customizable Settings**: Flexible configuration for different image types
+- Supports `.raw` files and optional `.bin` files
+- Pixel formats: `grayscale`, `rgb`, `rggb`, `grbg`, `gbrg`, `bggr`
+- Bit depths: `8`, `10`, `12`, `14`, `16`
+- Storage layouts:
+  - `packed bitstream`
+  - `16-bit container` (little-endian, high-bit aligned)
+- Shared size validation and resolution recommendation logic across UI, validation, and rendering
+- File-name based parameter hints for common naming patterns such as `3840x2160_14_RGGB.raw`, `w2688_h1520_10bit_RGGB.raw`, and `w2688_h1520_16bit_10msb_RGGB.raw`
+- Canvas-based zoom, pan, and pixel inspection
 
-## Supported Formats
+## Supported Data Layouts
 
-- `.raw` files with various bit depths (8-bit, 10-bit, 14-bit, 16-bit)
-- Bayer pattern images (RGGB, BGGR, GRBG, GBRG)
-- Custom width/height configurations
-- Multiple byte order support
+The viewer distinguishes between two on-disk layouts:
+
+1. `packed bitstream`: samples are stored back-to-back using the selected bit depth.
+2. `16-bit container`: each sample occupies 2 bytes and is interpreted as little-endian with the meaningful bits stored in the high bits.
+
+The extension does not currently provide selectable byte-order modes. The `16-bit container` path always uses the interpretation above.
+
+The initially selected layout follows the bit depth: `8 bpp` files default to `packed bitstream`, while `10/12/14/16 bpp` files default to `16-bit container`, matching the historical behaviour of the viewer. Both layouts remain freely selectable for any bit depth.
 
 ## Usage
 
-1. Install the extension from the VS Code Marketplace
-2. Open any `.raw` file in VS Code
-3. The extension will automatically open the RAW image viewer
-4. Adjust image parameters as needed:
-   - Image width and height
-   - Pixel format and bit depth
-   - Byte order
-   - Scale and zoom levels
+1. Open a `.raw` file in VS Code.
+2. Adjust:
+   - image width and height
+   - bit depth
+   - sample storage layout
+   - pixel format
+3. Apply the settings to render the frame.
 
-## Requirements
+If the file name contains width, height, bit depth, or Bayer pattern hints, the viewer will use them to prefill the controls when possible.
 
-- VS Code 1.91.0 or higher
-- No additional dependencies required
+## Development
+
+- `npm run compile`: compile the extension TypeScript
+- `npm run build:webview`: build the Vue webview
+- `npm run build`: build both extension and webview
+- `npm run test`: run compile, lint, and unit tests
+
+### Testing
+
+The project has four test layers:
+
+| Layer | Command | What it covers |
+|-------|---------|----------------|
+| Unit | `npm run test:unit` | Pure logic: size validation, resolution recommendation, sample decoding |
+| Webview E2E | `npm run test:e2e:webview` | Playwright drives the built webview in a real browser (boot, zoom, controls, hints, errors, every pixel format) |
+| VS Code E2E | `npm run test:e2e:vscode` | `vscode-extension-tester` launches a real VS Code window and asserts on the custom editor webview |
+| Host integration | `npm run test:integration` | Activation, commands, and custom-editor document loading inside the VS Code test host |
+
+`npm run test:e2e:webview` needs the webview to be built first (`npm run build:webview`); on a headless machine prefix it with `xvfb-run -a`.
+`npm run test:e2e:vscode` is a local-only check: it packages the extension, installs it into `.test-resources/`, and downloads VS Code on first run.
 
 ## License
 
-MIT License - see LICENSE file for details
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit issues and pull requests.
+MIT
 
 ---
 
 **Extension ID**: `raw-image-viewer`  
-**Publisher**: YoungHong1992  
-**Version**: 0.0.5
+**Publisher**: `YoungHong1992`  
+**Version**: `0.0.6`
