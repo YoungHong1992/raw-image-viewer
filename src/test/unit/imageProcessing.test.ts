@@ -109,4 +109,42 @@ suite('Image Processing', () => {
 
     assert.deepStrictEqual(readPixel(pixels, 4, 1, 1), [210, 60, 15, 255]);
   });
+
+  test('renderRawImage maps the GBRG Bayer center pixel correctly', () => {
+    const data = new Uint8Array([
+      10, 200, 20, 210,
+      30, 100, 40, 110,
+      50, 220, 60, 230,
+      15, 105, 25, 115
+    ]);
+
+    const pixels = renderRawImage(data, {
+      width: 4,
+      height: 4,
+      bitsPerPixel: 8,
+      pixelFormat: 'gbrg',
+      storageMode: 'packed'
+    });
+
+    assert.deepStrictEqual(readPixel(pixels, 4, 1, 1), [35, 100, 210, 255]);
+  });
+
+  test('renderRawImage maps the BGGR Bayer center pixel correctly', () => {
+    const data = new Uint8Array([
+      10, 200, 20, 210,
+      30, 100, 40, 110,
+      50, 220, 60, 230,
+      15, 105, 25, 115
+    ]);
+
+    const pixels = renderRawImage(data, {
+      width: 4,
+      height: 4,
+      bitsPerPixel: 8,
+      pixelFormat: 'bggr',
+      storageMode: 'packed'
+    });
+
+    assert.deepStrictEqual(readPixel(pixels, 4, 1, 1), [100, 123, 35, 255]);
+  });
 });

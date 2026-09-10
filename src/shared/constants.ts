@@ -18,7 +18,9 @@ export const PIXEL_FORMATS = [
   'grayscale',
   'rgb', 
   'rggb',
-  'grbg'
+  'grbg',
+  'gbrg',
+  'bggr'
 ] as const;
 
 export const STORAGE_MODES = [

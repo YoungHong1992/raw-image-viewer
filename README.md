@@ -5,7 +5,7 @@ A Visual Studio Code extension for inspecting raw image buffers with adjustable 
 ## Features
 
 - Supports `.raw` files and optional `.bin` files
-- Pixel formats: `grayscale`, `rgb`, `rggb`, `grbg`
+- Pixel formats: `grayscale`, `rgb`, `rggb`, `grbg`, `gbrg`, `bggr`
 - Bit depths: `8`, `10`, `12`, `14`, `16`
 - Storage layouts:
   - `packed bitstream`
@@ -22,6 +22,8 @@ The viewer distinguishes between two on-disk layouts:
 2. `16-bit container`: each sample occupies 2 bytes and is interpreted as little-endian with the meaningful bits stored in the high bits.
 
 The extension does not currently provide selectable byte-order modes. The `16-bit container` path always uses the interpretation above.
+
+The initially selected layout follows the bit depth: `8 bpp` files default to `packed bitstream`, while `10/12/14/16 bpp` files default to `16-bit container`, matching the historical behaviour of the viewer. Both layouts remain freely selectable for any bit depth.
 
 ## Usage
 

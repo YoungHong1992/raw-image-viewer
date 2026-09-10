@@ -100,6 +100,10 @@ npm run lint
 ## 支持的格式
 
 - **位深度**: 8, 10, 12, 14, 16 bit
+- **存储布局**:
+  - `packed bitstream`（按位深度紧密排列）
+  - `16-bit container`（每个采样点占 2 字节，小端序，有效位靠高位对齐）
+  - 默认布局随位深度切换：8 bit 默认 `packed bitstream`，10/12/14/16 bit 默认 `16-bit container`
 - **像素格式**: 
   - Grayscale (灰度)
   - RGB

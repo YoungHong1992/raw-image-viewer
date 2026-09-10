@@ -39,8 +39,11 @@ jobs:
     - name: Compile extension
       run: npm run compile
     
-    - name: Run tests
-      run: xvfb-run -a npm run test
+    - name: Run unit tests
+      run: npm run test:unit
+    
+    - name: Run integration tests
+      run: xvfb-run -a npm run test:integration
 
   release:
     needs: test

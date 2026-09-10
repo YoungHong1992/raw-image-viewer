@@ -32,7 +32,7 @@ export interface ResponseMessage extends WebviewMessage {
 /**
  * 图像参数类型
  */
-export type PixelFormat = 'grayscale' | 'rgb' | 'rggb' | 'grbg';
+export type PixelFormat = 'grayscale' | 'rgb' | 'rggb' | 'grbg' | 'gbrg' | 'bggr';
 
 export type StorageMode = 'packed' | 'word16';
 

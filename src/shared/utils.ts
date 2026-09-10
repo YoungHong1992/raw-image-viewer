@@ -1,7 +1,12 @@
-import { COMMON_RESOLUTIONS } from './constants';
+import { COMMON_RESOLUTIONS, PIXEL_FORMATS, STORAGE_MODES } from './constants';
 import { ImageParams, PixelFormat, ResolutionCandidate, StorageMode } from './types';
 
 const MAX_DIMENSION = 32768;
+
+/**
+ * 旧版本允许帧数据之外最多 50% 的尾部冗余（填充、元数据等）
+ */
+export const MAX_FILE_SIZE_SLACK = 0.5;
 
 const ASPECT_RATIOS = [
   { ratio: '16:9', value: 16 / 9, priority: 8 },
@@ -123,6 +128,24 @@ export function matchesFileSize(params: ImageParams, fileSize: number): boolean 
   return calculateRequiredBytes(params) === fileSize;
 }
 
+/**
+ * 与 matchesFileSize 的精确匹配不同，这里保留了旧版本的宽容度，
+ * 用于放行带有尾部填充或元数据的文件
+ */
+export function isFileSizeCompatible(params: ImageParams, fileSize: number): boolean {
+  const requiredBytes = calculateRequiredBytes(params);
+  const maxBytes = Math.floor(requiredBytes * (1 + MAX_FILE_SIZE_SLACK));
+
+  return fileSize >= requiredBytes && fileSize <= maxBytes;
+}
+
+/**
+ * 与旧版本行为保持一致：8-bit 样本按紧凑字节流读取，更宽的样本按 16-bit 容器读取
+ */
+export function defaultStorageModeForBitDepth(bitsPerPixel: number): StorageMode {
+  return bitsPerPixel > 8 ? 'word16' : 'packed';
+}
+
 export function findMatchingResolutions(
   fileSize: number,
   bitsPerPixel: number,
@@ -224,8 +247,8 @@ export function validateImageParams(
       invalidBits: 'Invalid bit depth. Supported: 8, 10, 12, 14, 16',
       invalidFormat: 'Invalid pixel format',
       invalidStorageMode: 'Invalid storage mode',
-      fileSizeMismatch: (expected: number, actual: number) =>
-        `File size mismatch for ${storageModeLabel}: expected ${expected} bytes, got ${actual} bytes`,
+      fileSizeMismatch: (expected: number, max: number, actual: number) =>
+        `File size mismatch for ${storageModeLabel}: expected ${expected}-${max} bytes, got ${actual} bytes`,
     },
     'zh-cn': {
       invalidWidth: '图像宽度无效 (1-32768)',
@@ -233,8 +256,8 @@ export function validateImageParams(
       invalidBits: '位深度无效，支持: 8, 10, 12, 14, 16',
       invalidFormat: '像素格式无效',
       invalidStorageMode: '存储方式无效',
-      fileSizeMismatch: (expected: number, actual: number) =>
-        `${storageModeLabel}的文件大小不匹配: 预期 ${expected} 字节, 实际 ${actual} 字节`,
+      fileSizeMismatch: (expected: number, max: number, actual: number) =>
+        `${storageModeLabel}的文件大小不匹配: 预期 ${expected}-${max} 字节, 实际 ${actual} 字节`,
     }
   }[lang];
 
@@ -250,17 +273,18 @@ export function validateImageParams(
     return { valid: false, error: msg.invalidBits };
   }
 
-  if (!params.pixelFormat || !['grayscale', 'rgb', 'rggb', 'grbg'].includes(params.pixelFormat)) {
+  if (!params.pixelFormat || !(PIXEL_FORMATS as readonly string[]).includes(params.pixelFormat)) {
     return { valid: false, error: msg.invalidFormat };
   }
 
-  if (!params.storageMode || !['packed', 'word16'].includes(params.storageMode)) {
+  if (!params.storageMode || !(STORAGE_MODES as readonly string[]).includes(params.storageMode)) {
     return { valid: false, error: msg.invalidStorageMode };
   }
 
   const requiredBytes = calculateRequiredBytes(params);
-  if (fileSize !== requiredBytes) {
-    return { valid: false, error: msg.fileSizeMismatch(requiredBytes, fileSize) };
+  if (!isFileSizeCompatible(params, fileSize)) {
+    const maxBytes = Math.floor(requiredBytes * (1 + MAX_FILE_SIZE_SLACK));
+    return { valid: false, error: msg.fileSizeMismatch(requiredBytes, maxBytes, fileSize) };
   }
 
   return { valid: true };

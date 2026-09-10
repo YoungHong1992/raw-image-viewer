@@ -4,6 +4,22 @@ All notable changes to the "raw-image-viewer" extension will be documented in th
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [Unreleased]
+
+### Added
+- **Selectable storage layouts**: `packed bitstream` and `16-bit container` (little-endian, high-bit aligned) instead of a single fixed byte layout
+- **Shared decoding module**: size validation, resolution recommendation, and rendering now live in `src/shared/` and are reused by the extension and the webview
+- **Unit test suite** (`npm run test:unit`) covering validation, resolution recommendation, and sample decoding
+
+### Fixed
+- **GBRG and BGGR Bayer patterns now render correctly**: both formats were selectable but produced black pixels; all four Bayer patterns share a single demosaic lookup table
+- **Default storage layout aligned with previous releases**: 10/12/14/16 bpp files open as `16-bit container` again, so existing files render as before
+- **File size validation restored to a tolerant range**: files up to 50% larger than the exact frame size are accepted again, covering line padding and appended metadata
+
+### Changed
+- File size mismatch errors now report the accepted range instead of a single exact size
+- `npm test` runs compile, lint, and unit tests; the VS Code host integration tests are available via `npm run test:integration`
+
 ## [0.0.3] - 2025-01-27
 
 ### Added

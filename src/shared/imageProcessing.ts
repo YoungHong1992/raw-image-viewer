@@ -59,35 +59,27 @@ function buildNormalizedSamples(
   return normalized;
 }
 
-function getBayerSite(pixelFormat: PixelFormat, x: number, y: number): 'r' | 'b' | 'g-r' | 'g-b' {
-  const evenRow = y % 2 === 0;
-  const evenCol = x % 2 === 0;
+type BayerSite = 'r' | 'b' | 'g-r' | 'g-b';
 
-  if (pixelFormat === 'rggb') {
-    if (evenRow && evenCol) {
-      return 'r';
-    }
+/**
+ * 2x2 图块按行优先排列：(0,0), (0,1), (1,0), (1,1)
+ * 'g-r' 表示绿点横向邻居为红，'g-b' 表示绿点横向邻居为蓝
+ */
+const BAYER_SITES: Record<Exclude<PixelFormat, 'grayscale' | 'rgb'>, [BayerSite, BayerSite, BayerSite, BayerSite]> = {
+  rggb: ['r', 'g-r', 'g-b', 'b'],
+  grbg: ['g-r', 'r', 'b', 'g-b'],
+  gbrg: ['g-b', 'b', 'r', 'g-r'],
+  bggr: ['b', 'g-b', 'g-r', 'r']
+};
 
-    if (!evenRow && !evenCol) {
-      return 'b';
-    }
+function getBayerSite(pixelFormat: PixelFormat, x: number, y: number): BayerSite {
+  const sites = BAYER_SITES[pixelFormat as keyof typeof BAYER_SITES];
 
-    return evenRow ? 'g-r' : 'g-b';
+  if (!sites) {
+    throw new Error(`Unsupported Bayer format: ${pixelFormat}`);
   }
 
-  if (pixelFormat === 'grbg') {
-    if (evenRow && !evenCol) {
-      return 'r';
-    }
-
-    if (!evenRow && evenCol) {
-      return 'b';
-    }
-
-    return evenRow ? 'g-r' : 'g-b';
-  }
-
-  throw new Error(`Unsupported Bayer format: ${pixelFormat}`);
+  return sites[(y % 2) * 2 + (x % 2)];
 }
 
 function renderGrayscale(normalizedSamples: Uint8Array, width: number, height: number): Uint8ClampedArray {

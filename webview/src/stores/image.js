@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { COMMON_RESOLUTIONS, SUPPORTED_BITS_PER_PIXEL, PIXEL_FORMATS, STORAGE_MODES } from '../../../src/shared/constants';
-import { validateImageParams } from '../../../src/shared/utils';
+import { defaultStorageModeForBitDepth, validateImageParams } from '../../../src/shared/utils';
 
 export const useImageStore = defineStore('image', () => {
   // i18n
@@ -31,6 +31,8 @@ export const useImageStore = defineStore('image', () => {
         rgb: 'RGB',
         rggb: 'RGGB (Bayer)',
         grbg: 'GRBG (Bayer)',
+        gbrg: 'GBRG (Bayer)',
+        bggr: 'BGGR (Bayer)',
       },
       status: {
         imageSize: 'Image:',
@@ -83,6 +85,8 @@ export const useImageStore = defineStore('image', () => {
         rgb: 'RGB',
         rggb: 'RGGB (Bayer)',
         grbg: 'GRBG (Bayer)',
+        gbrg: 'GBRG (Bayer)',
+        bggr: 'BGGR (Bayer)',
       },
       status: {
         imageSize: '图像尺寸:',
@@ -144,10 +148,11 @@ export const useImageStore = defineStore('image', () => {
   const rawData = ref(null);
   const fileName = ref('');
   const fileSize = ref(0);
+  const defaultBitsPerPixel = 10;
   const width = ref(2688);
   const height = ref(1520);
-  const bitsPerPixel = ref(10);
-  const storageMode = ref('packed');
+  const bitsPerPixel = ref(defaultBitsPerPixel);
+  const storageMode = ref(defaultStorageModeForBitDepth(defaultBitsPerPixel));
   const pixelFormat = ref('grayscale');
   const ready = ref(false);
   const error = ref(null);

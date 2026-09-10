@@ -93,6 +93,8 @@
           <option value="rgb">{{ t('pixelFormat.rgb') }}</option>
           <option value="rggb">{{ t('pixelFormat.rggb') }}</option>
           <option value="grbg">{{ t('pixelFormat.grbg') }}</option>
+          <option value="gbrg">{{ t('pixelFormat.gbrg') }}</option>
+          <option value="bggr">{{ t('pixelFormat.bggr') }}</option>
         </select>
       </div>
     </div>
@@ -112,7 +114,7 @@
 import { computed, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useImageStore } from '../../stores/image';
-import { calculateTotalPixels, findMatchingResolutions, findRecommendedResolution, matchesFileSize } from '../../../../src/shared/utils';
+import { calculateTotalPixels, defaultStorageModeForBitDepth, findMatchingResolutions, findRecommendedResolution, isFileSizeCompatible, matchesFileSize } from '../../../../src/shared/utils';
 
 const store = useImageStore();
 const {
@@ -148,7 +150,7 @@ const canApply = computed(() => {
     return false;
   }
 
-  return matchesFileSize({
+  return isFileSizeCompatible({
     width: localWidth.value,
     height: localHeight.value,
     bitsPerPixel: bitsPerPixel.value,
@@ -219,7 +221,7 @@ const parseFileNameHints = (name) => {
     normalized.match(/(?:^|[_-])(8|10|12|14|16)(?=bit(?:[_\-.]|$)|[_\-.]|$)/i) ||
     normalized.match(/(\d{1,2})bit/i);
 
-  const formatMatch = normalized.match(/(?:^|[_-])(rggb|grbg|rgb|grayscale|gray|grey)(?:[_\-.]|$)/i);
+  const formatMatch = normalized.match(/(?:^|[_-])(rggb|grbg|gbrg|bggr|rgb|grayscale|gray|grey)(?:[_\-.]|$)/i);
 
   let inferredStorageMode = null;
   if (/(?:^|[_-])(packed|mipi)(?:[_\-.]|$)/i.test(normalized)) {
@@ -239,7 +241,9 @@ const parseFileNameHints = (name) => {
           grayscale: 'grayscale',
           rgb: 'rgb',
           rggb: 'rggb',
-          grbg: 'grbg'
+          grbg: 'grbg',
+          gbrg: 'gbrg',
+          bggr: 'bggr'
         }[formatMatch[1]])
       : null,
     storageMode: inferredStorageMode
@@ -361,7 +365,14 @@ const selectSize = (size) => {
 };
 
 const selectBitsPerPixel = (bits) => {
+  const previousDefault = defaultStorageModeForBitDepth(bitsPerPixel.value);
   bitsPerPixel.value = bits;
+
+  // 跟随位深切换到兼容旧版本的布局，除非用户已手动选择了存储方式
+  if (storageMode.value === previousDefault) {
+    storageMode.value = defaultStorageModeForBitDepth(bits);
+  }
+
   if (!applyRecommendedResolution(true)) {
     emitApplyIfPossible();
   }
